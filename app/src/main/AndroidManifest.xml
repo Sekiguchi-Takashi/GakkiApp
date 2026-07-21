@@ -17,6 +17,11 @@
         </activity>
 
         <activity
+            android:name=".CastanetActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <activity
             android:name=".TambourineActivity"
             android:exported="false"
             android:screenOrientation="portrait" />

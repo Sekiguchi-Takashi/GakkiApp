@@ -50,7 +50,7 @@ class MainActivity : Activity() {
         val row2 = row()
 
         row1.addView(card(0, "カスタネット") {
-            Toast.makeText(this, "カスタネットは じゅんびちゅう！", Toast.LENGTH_SHORT).show()
+            startActivity(Intent(this, CastanetActivity::class.java))
         })
         row1.addView(card(1, "タンバリン") {
             startActivity(Intent(this, TambourineActivity::class.java))

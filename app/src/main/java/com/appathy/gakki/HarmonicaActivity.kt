@@ -8,8 +8,12 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
 import kotlin.math.abs
 import kotlin.math.sin
 
@@ -19,7 +23,45 @@ class HarmonicaActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val v = HarmonicaView()
+        showModeSelect()
+    }
+
+    private fun showModeSelect() {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.rgb(230, 244, 255))
+            setPadding(dp(24), dp(16), dp(24), dp(16))
+        }
+        root.addView(TextView(this).apply {
+            text = "🎵 ハーモニカ"
+            textSize = 28f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(40, 80, 140))
+            setPadding(0, 0, 0, dp(12))
+        })
+        root.addView(TextView(this).apply {
+            text = "うえに でる ドレミを じゅんばんに ふこう！\nあかい あなを くちに あわせて とめると おとが でるよ"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(90, 120, 160))
+            setPadding(0, 0, 0, dp(20))
+        })
+        root.addView(Button(this).apply {
+            text = "しょきゅう（ふきおわるまで おんがくが まってくれるよ）"
+            textSize = 15f
+            setOnClickListener { startGame(beginner = true) }
+        })
+        root.addView(Button(this).apply {
+            text = "ちゅうきゅう（とまらずに さいごまで）"
+            textSize = 15f
+            setOnClickListener { startGame(beginner = false) }
+        })
+        setContentView(root)
+    }
+
+    private fun startGame(beginner: Boolean) {
+        val v = HarmonicaView(beginner)
         gameView = v
         setContentView(v)
         v.start()
@@ -37,30 +79,36 @@ class HarmonicaActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        gameView?.player?.resume()
+        gameView?.let { if (!it.pausedForTask) it.player?.resume() }
     }
 
-    inner class HarmonicaView : View(this@HarmonicaActivity) {
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    inner class HarmonicaView(private val beginner: Boolean) : View(this@HarmonicaActivity) {
         var player: SongPlayer? = null
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-        // 穴: ド レ ミ ファ ソ ラ シ ド
         private val holeSemis = intArrayOf(0, 2, 4, 5, 7, 9, 11, 12)
         private val holeNames = arrayOf("ド", "レ", "ミ", "ファ", "ソ", "ラ", "シ", "ド")
+        private fun semiName(semi: Int): String {
+            val i = holeSemis.indexOf(semi)
+            return if (i >= 0) holeNames[i] else "?"
+        }
         private val harmPcm = HashMap<Int, ShortArray>()
 
-        // ハーモニカ位置（xのみスライド）
         private var harmX = 0f
         private var dragging = false
         private var dragDx = 0f
         private var lastMoveTime = 0L
-        private var firedHole = -1          // 静止発音済みの穴
-        private var blowUntil = 0L          // 息演出
+        private var firedHole = -1
+        private var blowUntil = 0L
+        private var inhaleUntil = 0L        // 一段落 → 横を向いて息を吸う
+        private var lastPhrase = -1
 
-        // 課題（ハーモニカ区間）
         private var taskPhrase = -1
         private var taskNotes: List<Triple<Int, Int, Int>> = emptyList()
         private var taskIdx = 0
+        var pausedForTask = false           // 初級: 吹き終わるまで停止
         private var finished = false
 
         private val STILL_MS = 300L
@@ -79,20 +127,18 @@ class HarmonicaActivity : Activity() {
             player = null
         }
 
-        // レイアウト計算
         private fun harmW() = width * 0.62f
         private fun harmH() = height * 0.16f
         private fun holeW() = harmW() / 8
         private fun mouthX() = width * 0.235f
-        private fun mouthY() = height * 0.42f
+        private fun mouthY() = height * 0.46f
         private fun harmY() = mouthY() - harmH() / 2
-        private fun targetX() = mouthX() + width * 0.035f   // 口の前のねらい位置
+        private fun targetX() = mouthX() + width * 0.035f
 
         override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
             harmX = w * 0.35f
         }
 
-        /** 口ゾーンに重なっている穴（なければ-1） */
         private fun holeAtMouth(): Int {
             for (i in 0 until 8) {
                 val cx = harmX + (i + 0.5f) * holeW()
@@ -136,35 +182,55 @@ class HarmonicaActivity : Activity() {
             val pos = p?.posMs ?: 0
             val now = SystemClock.uptimeMillis()
             val phrase = Music.phraseOf(pos)
-            val harmonicaTurn = !finished && Music.isHarmonicaPhrase(phrase)
+            val harmonicaTurn = !finished && (Music.isHarmonicaPhrase(phrase) || pausedForTask)
 
-            // ハーモニカ区間に入ったら課題をロード
-            if (harmonicaTurn && phrase != taskPhrase) {
+            // 一段落（じぶんの ばん → おてほん）の切り替わりで息を吸う
+            if (phrase != lastPhrase) {
+                if (lastPhrase >= 0 && Music.isHarmonicaPhrase(lastPhrase) && !Music.isHarmonicaPhrase(phrase)) {
+                    inhaleUntil = now + 1200
+                }
+                lastPhrase = phrase
+            }
+
+            // ハーモニカ区間に入ったら課題ロード
+            if (!pausedForTask && Music.isHarmonicaPhrase(phrase) && phrase != taskPhrase && !finished) {
                 taskPhrase = phrase
-                // 直前のメロディ区間と同じフレーズを吹く
                 taskNotes = Music.notesInPhrase(phrase - 1)
                 taskIdx = 0
                 firedHole = -1
             }
 
-            // 目標の穴
+            // 初級: 区間の終わりまでに吹き終わっていなければ停止して待つ
+            if (beginner && p != null && !pausedForTask && !finished &&
+                Music.isHarmonicaPhrase(phrase) && phrase == taskPhrase &&
+                taskIdx < taskNotes.size &&
+                pos >= (phrase + 1) * Music.PHRASE_MS - 120
+            ) {
+                pausedForTask = true
+                p.pause()
+            }
+
             var targetHole = -1
             if (harmonicaTurn && taskIdx < taskNotes.size) {
-                val semi = taskNotes[taskIdx].second
-                targetHole = holeSemis.indexOf(semi)
+                targetHole = holeSemis.indexOf(taskNotes[taskIdx].second)
             }
 
             // 静止判定 → 発音
             val mouthHole = holeAtMouth()
             if (mouthHole >= 0 && mouthHole != firedHole &&
-                now - lastMoveTime >= STILL_MS && p != null && !p.paused
+                now - lastMoveTime >= STILL_MS && p != null
             ) {
                 firedHole = mouthHole
                 playHole(mouthHole)
                 if (harmonicaTurn && mouthHole == targetHole) {
                     taskIdx++
-                    firedHole = -1                      // 同じ穴の連続にも対応
-                    lastMoveTime = now                  // 次の音まで少し待つ
+                    firedHole = -1
+                    lastMoveTime = now
+                    // 初級: 吹き終わったら再開
+                    if (pausedForTask && taskIdx >= taskNotes.size) {
+                        pausedForTask = false
+                        p.resume()
+                    }
                 }
             }
 
@@ -172,10 +238,53 @@ class HarmonicaActivity : Activity() {
             c.drawColor(Color.rgb(225, 243, 255))
             paint.style = Paint.Style.FILL
             paint.color = Color.rgb(200, 230, 200)
-            c.drawRect(0f, height * 0.72f, width.toFloat(), height.toFloat(), paint)
+            c.drawRect(0f, height * 0.74f, width.toFloat(), height.toFloat(), paint)
+
+            // ---- 上部: 吹く音のドレミ列（できたら色が変わる） ----
+            val stripNotes: List<Triple<Int, Int, Int>>
+            val stripProgress: Int
+            if (harmonicaTurn) {
+                stripNotes = taskNotes
+                stripProgress = taskIdx
+            } else {
+                // おてほん中: つぎに吹くフレーズを予告表示
+                stripNotes = if (!finished) Music.notesInPhrase(phrase) else emptyList()
+                stripProgress = 0
+            }
+            if (stripNotes.isNotEmpty()) {
+                paint.textAlign = Paint.Align.CENTER
+                val ts = dpF(26f)
+                paint.textSize = ts
+                val cw = ts * 1.7f
+                val total = stripNotes.size * cw
+                var x = width / 2f - total / 2 + cw / 2
+                val y = height * 0.135f
+                for ((i, n) in stripNotes.withIndex()) {
+                    when {
+                        harmonicaTurn && i < stripProgress -> {           // ふけた音 → 色が変わる
+                            paint.color = Color.rgb(40, 170, 80)
+                            paint.style = Paint.Style.FILL
+                            c.drawCircle(x, y - ts * 0.35f, cw * 0.48f, paint)
+                            paint.color = Color.WHITE
+                        }
+                        harmonicaTurn && i == stripProgress -> {          // いまの音 → 赤点滅
+                            val blink = 0.6f + 0.4f * sin(now / 120.0).toFloat()
+                            paint.color = Color.argb((255 * blink).toInt(), 235, 40, 40)
+                        }
+                        else -> paint.color = Color.rgb(130, 140, 155)
+                    }
+                    c.drawText(semiName(n.second), x, y, paint)
+                    x += cw
+                }
+            }
 
             // ---- 子供 ----
-            InstrumentArt.child(c, mouthX(), mouthY(), height * 0.9f, now < blowUntil || harmonicaTurn)
+            val childMode = when {
+                now < inhaleUntil -> InstrumentArt.CHILD_INHALE
+                now < blowUntil || harmonicaTurn -> InstrumentArt.CHILD_BLOW
+                else -> InstrumentArt.CHILD_IDLE
+            }
+            InstrumentArt.child(c, mouthX(), mouthY(), height * 0.85f, childMode)
 
             // ---- ねらいの枠（点線） ----
             paint.style = Paint.Style.STROKE
@@ -199,7 +308,6 @@ class HarmonicaActivity : Activity() {
             for (i in 0 until 8) {
                 val x0 = harmX + i * holeW()
                 val cx = x0 + holeW() / 2
-                // 赤く光る: 目標の穴（点滅）
                 if (i == targetHole) {
                     val blink = 0.6f + 0.4f * sin(now / 120.0).toFloat()
                     paint.color = Color.argb((200 * blink).toInt(), 255, 40, 40)
@@ -208,7 +316,6 @@ class HarmonicaActivity : Activity() {
                         dpF(6f), dpF(6f), paint
                     )
                 }
-                // 発音中の穴を明るく
                 if (i == firedHole && now < blowUntil) {
                     paint.color = Color.argb(150, 255, 230, 90)
                     c.drawRoundRect(
@@ -216,42 +323,47 @@ class HarmonicaActivity : Activity() {
                         dpF(6f), dpF(6f), paint
                     )
                 }
-                // 穴
                 paint.color = Color.rgb(50, 55, 65)
                 c.drawRoundRect(
                     RectF(cx - holeW() * 0.18f, hy + hh * 0.36f, cx + holeW() * 0.18f, hy + hh * 0.64f),
                     dpF(3f), dpF(3f), paint
                 )
-                // 音名
                 paint.color = Color.rgb(60, 60, 70)
                 paint.textAlign = Paint.Align.CENTER
                 paint.textSize = hh * 0.2f
                 c.drawText(holeNames[i], cx, hy + hh * 0.22f, paint)
-                // 仕切り線
                 if (i > 0) {
                     paint.strokeWidth = dpF(1.5f)
                     c.drawLine(x0, hy + hh * 0.28f, x0, hy + hh * 0.72f, paint)
                 }
             }
 
-            // ---- 上部の案内 ----
+            // ---- 案内 ----
             paint.textAlign = Paint.Align.CENTER
-            paint.textSize = dpF(22f)
+            paint.textSize = dpF(20f)
             when {
                 finished -> {
                     paint.color = Color.rgb(220, 120, 0)
-                    c.drawText("🎉 おしまい！ よくできました！", width / 2f, height * 0.12f, paint)
+                    c.drawText("🎉 おしまい！ よくできました！", width / 2f, height * 0.24f, paint)
+                }
+                pausedForTask -> {
+                    paint.color = Color.rgb(230, 40, 40)
+                    c.drawText("あかい おとを ぜんぶ ふいたら つづくよ！", width / 2f, height * 0.24f, paint)
                 }
                 harmonicaTurn -> {
                     paint.color = Color.rgb(230, 40, 40)
                     val msg = if (taskIdx < taskNotes.size)
-                        "あかい あなを くちに あわせて とめよう！（のこり ${taskNotes.size - taskIdx}）"
-                    else "じょうず！ つぎの えんそうを まってね"
-                    c.drawText(msg, width / 2f, height * 0.12f, paint)
+                        "きみの ばん！（のこり ${taskNotes.size - taskIdx}）"
+                    else "じょうず！ つぎの おてほんを まってね"
+                    c.drawText(msg, width / 2f, height * 0.24f, paint)
+                }
+                now < inhaleUntil -> {
+                    paint.color = Color.rgb(60, 110, 190)
+                    c.drawText("すーっ…（いきを すってるよ）", width / 2f, height * 0.24f, paint)
                 }
                 else -> {
                     paint.color = Color.rgb(60, 110, 190)
-                    c.drawText("♪ おてほんを きいてね（つぎは きみの ばん！）", width / 2f, height * 0.12f, paint)
+                    c.drawText("♪ おてほんを きいてね（つぎは きみの ばん！）", width / 2f, height * 0.24f, paint)
                 }
             }
 

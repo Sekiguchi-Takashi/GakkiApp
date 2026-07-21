@@ -116,8 +116,35 @@ object InstrumentArt {
         c.drawCircle(cx + size * 0.4f, cy + size * 0.07f, size * 0.07f, p)
     }
 
+    const val CHILD_IDLE = 0
+    const val CHILD_BLOW = 1
+    const val CHILD_INHALE = 2   // 横を向いて息を吸う
+
     /** 息を吹く子供（ハーモニカ画面用）。mouthX/mouthY に口が来る */
-    fun child(c: Canvas, mouthX: Float, mouthY: Float, size: Float, blowing: Boolean) {
+    fun child(c: Canvas, mouthX: Float, mouthY: Float, size: Float, mode: Int) {
+        if (mode == CHILD_INHALE) {
+            // 口の位置を軸に左右反転 → 横（反対側）を向く
+            c.save()
+            c.scale(-1f, 1f, mouthX, mouthY)
+            drawChildBody(c, mouthX, mouthY, size, blowing = false, inhaling = true)
+            c.restore()
+            // 吸い込む息（口へ向かう線）
+            val headR = size * 0.16f
+            p.style = Paint.Style.STROKE
+            p.strokeWidth = headR * 0.09f
+            p.strokeCap = Paint.Cap.ROUND
+            p.color = Color.argb(150, 150, 210, 255)
+            for (k in 0 until 3) {
+                val yy = mouthY - headR * 0.18f + k * headR * 0.18f
+                c.drawLine(mouthX - headR * (1.0f + k * 0.15f), yy, mouthX - headR * 0.35f, yy, p)
+            }
+            p.strokeCap = Paint.Cap.BUTT
+        } else {
+            drawChildBody(c, mouthX, mouthY, size, blowing = mode == CHILD_BLOW, inhaling = false)
+        }
+    }
+
+    private fun drawChildBody(c: Canvas, mouthX: Float, mouthY: Float, size: Float, blowing: Boolean, inhaling: Boolean) {
         val headR = size * 0.16f
         val headX = mouthX - headR * 0.9f
         val headY = mouthY - headR * 0.25f
@@ -160,9 +187,13 @@ object InstrumentArt {
         p.style = Paint.Style.FILL
         p.color = Color.rgb(255, 170, 160)
         c.drawCircle(headX + headR * 0.35f, headY + headR * 0.35f, headR * (if (blowing) 0.30f else 0.18f), p)
-        // 口（すぼめた口）
+        // 口（吸うときは大きく開ける）
         p.color = Color.rgb(200, 90, 80)
-        c.drawCircle(mouthX, mouthY, headR * 0.16f, p)
+        c.drawCircle(mouthX, mouthY, headR * (if (inhaling) 0.24f else 0.16f), p)
+        if (inhaling) {
+            p.color = Color.rgb(120, 40, 40)
+            c.drawCircle(mouthX, mouthY, headR * 0.13f, p)
+        }
         // 息の線
         if (blowing) {
             p.style = Paint.Style.STROKE

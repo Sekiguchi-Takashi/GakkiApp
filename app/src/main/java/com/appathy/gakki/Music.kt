@@ -62,6 +62,31 @@ object Music {
         out
     }
 
+    /** タンバリン上級: (時刻ms, ゆらす=true)。偶数小節の3拍目がスワイプ */
+    val tambourineBeatsAdvanced: List<Pair<Int, Boolean>> by lazy {
+        val out = ArrayList<Pair<Int, Boolean>>()
+        for (m in 0 until TOTAL_MEAS) {
+            out.add(m * MEAS_MS to false)
+            out.add((m * MEAS_MS + 2 * BEAT_MS) to (m % 2 == 1))
+        }
+        out
+    }
+
+    /** カスタネット: (開始ms, 回数, 間隔ms)。回数1=単発。各周の6・12小節目は「ゆっくり×4」連打 */
+    val castanetGroups: List<Triple<Int, Int, Int>> by lazy {
+        val out = ArrayList<Triple<Int, Int, Int>>()
+        for (m in 0 until TOTAL_MEAS) {
+            val inVerse = m % VERSE_MEAS
+            if (inVerse == 5 || inVerse == 11) {
+                out.add(Triple(m * MEAS_MS, 4, BEAT_MS))   // ゆっくり×4（1拍間隔）
+            } else {
+                out.add(Triple(m * MEAS_MS, 1, 0))
+                out.add(Triple(m * MEAS_MS + 2 * BEAT_MS, 1, 0))
+            }
+        }
+        out
+    }
+
     /** phrase番号(2小節単位)。奇数がハーモニカ区間 */
     fun phraseOf(posMs: Int) = posMs / PHRASE_MS
     fun isHarmonicaPhrase(phrase: Int) = phrase % 2 == 1
@@ -138,6 +163,43 @@ object Music {
             for ((k, f) in jingles.withIndex()) {
                 v += sin(2 * PI * f * t + k) * Math.exp(-t * 9) * 0.15
             }
+            out[i] = (v.coerceIn(-1.0, 1.0) * 32767 * 0.85).toInt().toShort()
+        }
+        return out
+    }
+
+    /** タンバリンを揺らした音（ジングルのみのシャラシャラ 500ms） */
+    fun renderShake(): ShortArray {
+        val n = SR / 2
+        val out = ShortArray(n)
+        val rnd = java.util.Random(21)
+        val jingles = doubleArrayOf(4200.0, 5300.0, 6700.0, 8100.0, 9500.0)
+        for (i in 0 until n) {
+            val t = i.toDouble() / SR
+            var v = 0.0
+            // 揺れの強弱（8Hzでシャカシャカ）
+            val tremolo = 0.55 + 0.45 * sin(2 * PI * 8 * t)
+            for ((k, f) in jingles.withIndex()) {
+                v += sin(2 * PI * f * t + k * 1.3) * 0.14
+            }
+            v += (rnd.nextDouble() * 2 - 1) * 0.12
+            val env = if (t > 0.35) ((0.5 - t) / 0.15).coerceAtLeast(0.0) else 1.0
+            out[i] = (v * tremolo * env * 32767 * 0.8).coerceIn(-32767.0, 32767.0).toInt().toShort()
+        }
+        return out
+    }
+
+    /** カスタネット音（木の短いカチッ 150ms） */
+    fun renderCastanet(): ShortArray {
+        val n = SR * 3 / 20
+        val out = ShortArray(n)
+        val rnd = java.util.Random(3)
+        for (i in 0 until n) {
+            val t = i.toDouble() / SR
+            var v = 0.0
+            v += sin(2 * PI * 1900 * t) * Math.exp(-t * 60) * 0.7
+            v += sin(2 * PI * 3100 * t) * Math.exp(-t * 80) * 0.4
+            v += (rnd.nextDouble() * 2 - 1) * Math.exp(-t * 120) * 0.5
             out[i] = (v.coerceIn(-1.0, 1.0) * 32767 * 0.85).toInt().toShort()
         }
         return out
