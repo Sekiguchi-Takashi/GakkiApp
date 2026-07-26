@@ -13,9 +13,9 @@ import kotlin.math.sin
  */
 object Music {
     const val SR = 22050              // サンプルレート
-    const val BPM = 100
-    const val BEAT_MS = 60000 / BPM   // 600ms
-    const val MEAS_MS = BEAT_MS * 4   // 1小節 2400ms
+    const val BPM = 76                 // v1.2: ゆっくりに（100→76）難易度を下げる
+    const val BEAT_MS = 60000 / BPM   // 789ms
+    const val MEAS_MS = BEAT_MS * 4   // 1小節 約3.16秒
     const val PHRASE_MEAS = 2         // ハーモニカ交互区間 = 2小節 ≒ 4.8秒
     const val PHRASE_MS = MEAS_MS * PHRASE_MEAS
 
@@ -35,9 +35,9 @@ object Music {
         2 to 1, 2 to 1, 0 to 2
     )
     const val VERSE_MEAS = 12
-    const val LOOPS = 6                              // 6周 ≒ 172.8秒
-    const val TOTAL_MEAS = VERSE_MEAS * LOOPS        // 72小節
-    const val TOTAL_MS = TOTAL_MEAS * MEAS_MS        // 172800ms
+    const val LOOPS = 5                              // v1.2: 76BPM×5周 ≒ 189秒（約3分）
+    const val TOTAL_MEAS = VERSE_MEAS * LOOPS        // 60小節
+    const val TOTAL_MS = TOTAL_MEAS * MEAS_MS
 
     /** 全曲のメロディを (開始ms, 半音, 長さms) で展開 */
     val melody: List<Triple<Int, Int, Int>> by lazy {
@@ -97,6 +97,10 @@ object Music {
         val e = s + PHRASE_MS
         return melody.filter { it.first in s until e }
     }
+
+    /** 木琴の鍵盤（ド〜上のド の8枚）に使う半音 */
+    val xyloSemis = intArrayOf(0, 2, 4, 5, 7, 9, 11, 12)
+    fun xyloIndexOf(semi: Int): Int = xyloSemis.indexOf(semi)
 
     private fun freq(semi: Int, octave: Int = 5): Double =
         440.0 * 2.0.pow((semi - 9 + (octave - 4) * 12) / 12.0)
@@ -201,6 +205,23 @@ object Music {
             v += sin(2 * PI * 3100 * t) * Math.exp(-t * 80) * 0.4
             v += (rnd.nextDouble() * 2 - 1) * Math.exp(-t * 120) * 0.5
             out[i] = (v.coerceIn(-1.0, 1.0) * 32767 * 0.85).toInt().toShort()
+        }
+        return out
+    }
+
+    /** 木琴/マリンバ音（澄んだ木の響き。基音＋4倍音、速い減衰） 600ms */
+    fun renderXylophone(semi: Int): ShortArray {
+        val n = SR * 3 / 5
+        val out = ShortArray(n)
+        val f = freq(semi, 5)
+        for (i in 0 until n) {
+            val t = i.toDouble() / SR
+            // マリンバ特有: 4倍音が強い
+            var v = sin(2 * PI * f * t) * Math.exp(-t * 6)
+            v += 0.6 * sin(2 * PI * f * 4 * t) * Math.exp(-t * 11)
+            v += 0.25 * sin(2 * PI * f * 10 * t) * Math.exp(-t * 20)
+            val atk = if (t < 0.004) t / 0.004 else 1.0
+            out[i] = (v * atk * 0.5 * 32767).coerceIn(-32767.0, 32767.0).toInt().toShort()
         }
         return out
     }

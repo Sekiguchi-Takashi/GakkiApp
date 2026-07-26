@@ -97,8 +97,10 @@ class HarmonicaActivity : Activity() {
         private val harmPcm = HashMap<Int, ShortArray>()
 
         private var harmX = 0f
+        private var harmTargetX = 0f        // v1.2: スワイプの目標位置（harmXは毎フレーム補間で追従）
         private var dragging = false
-        private var dragDx = 0f
+        private var lastTouchX = 0f
+        private val SWIPE_GAIN = 1.8f        // v1.2: 少しのスワイプで大きく動く
         private var lastMoveTime = 0L
         private var firedHole = -1
         private var blowUntil = 0L
@@ -137,6 +139,7 @@ class HarmonicaActivity : Activity() {
 
         override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
             harmX = w * 0.35f
+            harmTargetX = harmX
         }
 
         private fun holeAtMouth(): Int {
@@ -150,18 +153,20 @@ class HarmonicaActivity : Activity() {
         override fun onTouchEvent(e: MotionEvent): Boolean {
             when (e.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    val r = RectF(harmX - dpF(24f), harmY() - dpF(24f), harmX + harmW() + dpF(24f), harmY() + harmH() + dpF(24f))
+                    val r = RectF(harmX - dpF(40f), harmY() - dpF(40f), harmX + harmW() + dpF(40f), harmY() + harmH() + dpF(40f))
                     if (r.contains(e.x, e.y)) {
                         dragging = true
-                        dragDx = e.x - harmX
+                        lastTouchX = e.x
                         lastMoveTime = SystemClock.uptimeMillis()
                     }
                 }
                 MotionEvent.ACTION_MOVE -> {
                     if (dragging) {
-                        val nx = (e.x - dragDx).coerceIn(-harmW() + holeW(), width - holeW())
-                        if (abs(nx - harmX) > dpF(2f)) {
-                            harmX = nx
+                        // v1.2: 指の移動量をGAIN倍して目標位置へ加算（少しの動きで大きく動く）
+                        val dx = (e.x - lastTouchX) * SWIPE_GAIN
+                        lastTouchX = e.x
+                        if (abs(dx) > dpF(0.5f)) {
+                            harmTargetX = (harmTargetX + dx).coerceIn(-harmW() + holeW(), width - holeW())
                             lastMoveTime = SystemClock.uptimeMillis()
                             firedHole = -1
                         }
@@ -181,6 +186,11 @@ class HarmonicaActivity : Activity() {
             val p = player
             val pos = p?.posMs ?: 0
             val now = SystemClock.uptimeMillis()
+
+            // v1.2: なめらか追従（毎フレーム目標へ35%ずつ近づける）
+            harmX += (harmTargetX - harmX) * 0.35f
+            if (abs(harmTargetX - harmX) < 0.5f) harmX = harmTargetX
+
             val phrase = Music.phraseOf(pos)
             val harmonicaTurn = !finished && (Music.isHarmonicaPhrase(phrase) || pausedForTask)
 

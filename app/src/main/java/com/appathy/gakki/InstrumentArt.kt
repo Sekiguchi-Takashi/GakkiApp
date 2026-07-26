@@ -118,17 +118,14 @@ object InstrumentArt {
 
     const val CHILD_IDLE = 0
     const val CHILD_BLOW = 1
-    const val CHILD_INHALE = 2   // 横を向いて息を吸う
+    const val CHILD_INHALE = 2   // v1.2: 頭は固定のまま口を開けて息を吸う
 
     /** 息を吹く子供（ハーモニカ画面用）。mouthX/mouthY に口が来る */
     fun child(c: Canvas, mouthX: Float, mouthY: Float, size: Float, mode: Int) {
         if (mode == CHILD_INHALE) {
-            // 口の位置を軸に左右反転 → 横（反対側）を向く
-            c.save()
-            c.scale(-1f, 1f, mouthX, mouthY)
+            // v1.2: 頭は固定（左右反転しない）。正面のまま口を開けて息を吸う
             drawChildBody(c, mouthX, mouthY, size, blowing = false, inhaling = true)
-            c.restore()
-            // 吸い込む息（口へ向かう線）
+            // 吸い込む息（口へ向かって外側から入ってくる線）
             val headR = size * 0.16f
             p.style = Paint.Style.STROKE
             p.strokeWidth = headR * 0.09f
@@ -136,7 +133,7 @@ object InstrumentArt {
             p.color = Color.argb(150, 150, 210, 255)
             for (k in 0 until 3) {
                 val yy = mouthY - headR * 0.18f + k * headR * 0.18f
-                c.drawLine(mouthX - headR * (1.0f + k * 0.15f), yy, mouthX - headR * 0.35f, yy, p)
+                c.drawLine(mouthX + headR * (1.0f + k * 0.15f), yy, mouthX + headR * 0.35f, yy, p)
             }
             p.strokeCap = Paint.Cap.BUTT
         } else {

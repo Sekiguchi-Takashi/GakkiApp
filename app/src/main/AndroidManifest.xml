@@ -27,6 +27,11 @@
             android:screenOrientation="portrait" />
 
         <activity
+            android:name=".XylophoneActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <activity
             android:name=".HarmonicaActivity"
             android:exported="false"
             android:screenOrientation="landscape" />

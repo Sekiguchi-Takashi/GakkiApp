@@ -11,7 +11,6 @@ import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
 
 class MainActivity : Activity() {
 
@@ -59,7 +58,7 @@ class MainActivity : Activity() {
             startActivity(Intent(this, HarmonicaActivity::class.java))
         })
         row2.addView(card(3, "もっきん") {
-            Toast.makeText(this, "もっきんは じゅんびちゅう！", Toast.LENGTH_SHORT).show()
+            startActivity(Intent(this, XylophoneActivity::class.java))
         })
 
         root.addView(row1)
