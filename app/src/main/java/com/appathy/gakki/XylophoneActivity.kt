@@ -13,7 +13,6 @@ import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
-import kotlin.math.abs
 
 class XylophoneActivity : Activity() {
 
@@ -46,20 +45,20 @@ class XylophoneActivity : Activity() {
             setPadding(0, 0, 0, dp(28))
         })
         root.addView(Button(this).apply {
-            text = "しょきゅう（まちがえると おんがくが とまるよ）"
+            text = "しょきゅう（ゆっくり）"
             textSize = 16f
-            setOnClickListener { startGame(beginner = true) }
+            setOnClickListener { startGame(0.85) }
         })
         root.addView(Button(this).apply {
-            text = "ちゅうきゅう（とまらずに さいごまで）"
+            text = "ちゅうきゅう（すこし はやい）"
             textSize = 16f
-            setOnClickListener { startGame(beginner = false) }
+            setOnClickListener { startGame(1.15) }
         })
         setContentView(root)
     }
 
-    private fun startGame(beginner: Boolean) {
-        val v = XyloView(beginner)
+    private fun startGame(tempo: Double) {
+        val v = XyloView(tempo)
         gameView = v
         setContentView(v)
         v.start()
@@ -77,12 +76,12 @@ class XylophoneActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        gameView?.let { if (!it.waiting) it.player?.resume() }
+        gameView?.player?.resume()
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
-    inner class XyloView(private val beginner: Boolean) : View(this@XylophoneActivity) {
+    inner class XyloView(private val tempo: Double) : View(this@XylophoneActivity) {
         var player: SongPlayer? = null
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
@@ -95,28 +94,25 @@ class XylophoneActivity : Activity() {
         )
         private val xyloPcm = HashMap<Int, ShortArray>()
 
-        // 落ちてくる音符（melodyから、木琴で叩ける音のみ）
+        // 落ちてくる音符（melodyから木琴で叩ける音のみ、時刻はtempoでスケール）
         private val notes: List<XyloNote> by lazy {
             Music.melody.mapNotNull { (t, semi, _) ->
                 val lane = Music.xyloIndexOf(semi)
-                if (lane >= 0) XyloNote(t, lane) else null
+                if (lane >= 0) XyloNote((t / tempo).toInt(), lane) else null
             }.sortedBy { it.time }
         }
-        private var nextIdx = 0          // まだ判定窓に達していない先頭
-        var waiting = false              // 初級: 停止中（この音を待つ）
-        private var waitingNote: XyloNote? = null
+        private var nextIdx = 0
         private var score = 0
         private var finished = false
-        private val flash = LongArray(8) // 各鍵盤のヒット演出終了時刻
+        private val flash = LongArray(8)
 
-        // 落下: 判定線に到達する FALL_MS 前に画面上端から出現
         private val FALL_MS = 2000
         private val WIN_BEFORE = 500
         private val WIN_AFTER = 400
 
         fun start() {
             for (s in semis) xyloPcm[s] = Music.renderXylophone(s)
-            val p = SongPlayer(Music.renderSong(muteMelodyOnOddPhrase = false))
+            val p = SongPlayer(Music.renderSong(muteMelodyOnOddPhrase = false, tempo = tempo))
             p.onFinished = { finished = true; postInvalidate() }
             player = p
             p.start()
@@ -128,9 +124,8 @@ class XylophoneActivity : Activity() {
             player = null
         }
 
-        // レイアウト
         private fun laneW() = width.toFloat() / 8
-        private fun ringY() = height * 0.62f         // 丸い枠（判定線）のY
+        private fun ringY() = height * 0.62f
         private fun keyTop() = height * 0.70f
         private fun keyBottomMax() = height * 0.96f
         private fun laneCx(lane: Int) = laneW() * (lane + 0.5f)
@@ -141,21 +136,6 @@ class XylophoneActivity : Activity() {
             val lane = (e.x / laneW()).toInt().coerceIn(0, 7)
             playKey(lane)
             val p = player ?: return true
-            val now = SystemClock.uptimeMillis()
-
-            if (waiting) {
-                val wn = waitingNote
-                if (wn != null && lane == wn.lane) {
-                    wn.hit = true
-                    score++
-                    waiting = false
-                    waitingNote = null
-                    p.resume()
-                }
-                return true
-            }
-
-            // 判定窓内で同レーンの未処理ノートを探す
             val pos = p.posMs
             for (i in nextIdx until notes.size) {
                 val n = notes[i]
@@ -181,26 +161,15 @@ class XylophoneActivity : Activity() {
             val pos = p?.posMs ?: 0
             val now = SystemClock.uptimeMillis()
 
-            // 進行＆ミス／停止判定
-            if (p != null && !waiting && !finished) {
+            // 進行（停止なし。逃したらmissedにするだけ）
+            if (p != null && !finished) {
                 while (nextIdx < notes.size && notes[nextIdx].time + WIN_AFTER < pos) {
                     val n = notes[nextIdx]
-                    if (!n.hit) {
-                        if (beginner) {
-                            n.missed = false
-                            waiting = true
-                            waitingNote = n
-                            p.pause()
-                            break
-                        } else {
-                            n.missed = true
-                        }
-                    }
+                    if (!n.hit) n.missed = true
                     nextIdx++
                 }
             }
 
-            // 背景
             c.drawColor(Color.rgb(245, 250, 240))
 
             val lw = laneW()
@@ -215,7 +184,7 @@ class XylophoneActivity : Activity() {
                 }
             }
 
-            // 丸い判定枠（各レーン）
+            // 丸い判定枠
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = dpF(3f)
             for (lane in 0 until 8) {
@@ -224,17 +193,14 @@ class XylophoneActivity : Activity() {
             }
 
             // 落ちてくる音符
-            val refPos = if (waiting) (waitingNote?.time ?: pos) else pos
             for (n in notes) {
                 if (n.hit || n.missed) continue
-                val dt = n.time - refPos
+                val dt = n.time - pos
                 if (dt > FALL_MS || dt < -WIN_AFTER - 100) continue
-                // dt=FALL_MS → 上端(0)、dt=0 → リング
                 val prog = 1f - dt.toFloat() / FALL_MS
                 val y = ry * prog
                 val cx = laneCx(n.lane)
                 val r = lw * 0.32f
-                // 枠に重なったら（窓内）強調
                 val inWin = dt in -WIN_AFTER..WIN_BEFORE
                 paint.style = Paint.Style.FILL
                 paint.color = barColors[n.lane]
@@ -247,7 +213,6 @@ class XylophoneActivity : Activity() {
                     paint.color = Color.WHITE
                     c.drawCircle(cx, y, r + dpF(4f), paint)
                 }
-                // 音名
                 paint.style = Paint.Style.FILL
                 paint.color = Color.WHITE
                 paint.textAlign = Paint.Align.CENTER
@@ -255,7 +220,7 @@ class XylophoneActivity : Activity() {
                 c.drawText(names[n.lane], cx, y + r * 0.35f, paint)
             }
 
-            // 木琴の鍵盤（下部、ド→ドで少しずつ短く）
+            // 木琴の鍵盤
             val kt = keyTop()
             for (lane in 0 until 8) {
                 val barLen = keyBottomMax() - kt - lane * (height * 0.012f)
@@ -266,40 +231,24 @@ class XylophoneActivity : Activity() {
                 paint.color = if (hit) brighten(barColors[lane]) else barColors[lane]
                 val top = if (hit) kt + dpF(3f) else kt
                 c.drawRoundRect(RectF(x0, top, x1, top + barLen), dpF(8f), dpF(8f), paint)
-                // 打点の穴
                 paint.color = Color.argb(120, 255, 255, 255)
                 c.drawCircle((x0 + x1) / 2, top + dpF(12f), dpF(3f), paint)
-                // 音名
                 paint.color = Color.argb(200, 0, 0, 0)
                 paint.textAlign = Paint.Align.CENTER
                 paint.textSize = lw * 0.32f
                 c.drawText(names[lane], (x0 + x1) / 2, top + barLen - dpF(10f), paint)
             }
 
-            // マレット位置ガイド（枠の説明）
+            // 上部テキスト（スコアのみ）
             paint.style = Paint.Style.FILL
             paint.textAlign = Paint.Align.CENTER
-            paint.textSize = dpF(18f)
-            paint.color = Color.rgb(90, 120, 90)
-            c.drawText("← ここで たたく", width / 2f, ry - lw * 0.5f, paint)
-
-            // 上部テキスト
             paint.textSize = dpF(22f)
-            when {
-                finished -> {
-                    paint.color = Color.rgb(220, 120, 0)
-                    c.drawText("🎉 おしまい！ よくできました！", width / 2f, height * 0.08f, paint)
-                }
-                waiting -> {
-                    paint.color = Color.rgb(230, 50, 50)
-                    val nm = waitingNote?.let { names[it.lane] } ?: ""
-                    c.drawText("「$nm」の けんばんを たたいてね！", width / 2f, height * 0.08f, paint)
-                }
-                else -> {
-                    paint.color = Color.rgb(60, 120, 70)
-                    val mode = if (beginner) "しょきゅう" else "ちゅうきゅう"
-                    c.drawText("$mode  ／  できた: $score", width / 2f, height * 0.08f, paint)
-                }
+            if (finished) {
+                paint.color = Color.rgb(220, 120, 0)
+                c.drawText("🎉 おしまい！ よくできました！", width / 2f, height * 0.08f, paint)
+            } else {
+                paint.color = Color.rgb(60, 120, 70)
+                c.drawText("できた: $score", width / 2f, height * 0.08f, paint)
             }
 
             if (!finished) postInvalidateOnAnimation()

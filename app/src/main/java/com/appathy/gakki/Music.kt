@@ -108,22 +108,26 @@ object Music {
     /**
      * 曲全体をレンダリング。
      * muteMelodyOnOddPhrase=true でハーモニカ区間のメロディを消音（伴奏のみ）
+     * tempo: 再生速度倍率（1.0=標準, 1.2=速い, 0.85=遅い）。木琴の初級/中級で使用
      */
-    fun renderSong(muteMelodyOnOddPhrase: Boolean): ShortArray {
-        val total = (TOTAL_MS.toLong() * SR / 1000).toInt()
+    fun renderSong(muteMelodyOnOddPhrase: Boolean, tempo: Double = 1.0): ShortArray {
+        val scaledTotalMs = (TOTAL_MS / tempo).toInt()
+        val total = (scaledTotalMs.toLong() * SR / 1000).toInt()
         val buf = FloatArray(total)
+
+        fun sc(ms: Int) = (ms / tempo).toInt()
 
         // ベース伴奏: 各小節 1・3拍目に低いド、2・4拍目にソ
         for (m in 0 until TOTAL_MEAS) {
             for (b in 0 until 4) {
                 val semi = if (b % 2 == 0) 0 else 7
-                addTone(buf, m * MEAS_MS + b * BEAT_MS, BEAT_MS, freq(semi, 3), 0.18f, bass = true)
+                addTone(buf, sc(m * MEAS_MS + b * BEAT_MS), sc(BEAT_MS), freq(semi, 3), 0.18f, bass = true)
             }
         }
         // メロディ
         for ((t, semi, dur) in melody) {
             if (muteMelodyOnOddPhrase && isHarmonicaPhrase(phraseOf(t))) continue
-            addTone(buf, t, dur, freq(semi, 5), 0.30f, bass = false)
+            addTone(buf, sc(t), sc(dur), freq(semi, 5), 0.30f, bass = false)
         }
         // クリップしてshort化
         val out = ShortArray(total)
@@ -226,22 +230,37 @@ object Music {
         return out
     }
 
-    /** ハーモニカ音（リード風: 矩形波成分＋ビブラート） 800ms */
+    /** ハーモニカ音（フリーリード風: 2枚のリードのうねり＋息＋奇数倍音） 900ms */
     fun renderHarmonica(semi: Int): ShortArray {
-        val n = SR * 4 / 5
+        val n = SR * 9 / 10
         val out = ShortArray(n)
-        val f = freq(semi, 5)
+        val f = freq(semi, 4)                 // 肉厚に聞こえる音域へ（甲高さを抑える）
+        val rnd = java.util.Random(semi * 131 + 7L)
+        var breath = 0.0
         for (i in 0 until n) {
             val t = i.toDouble() / SR
-            val vib = 1.0 + 0.006 * sin(2 * PI * 5.5 * t)
+            // 自然なビブラート（立ち上がりは浅く、後半で深く）
+            val vibDepth = 0.004 + 0.004 * (t / 0.9).coerceAtMost(1.0)
+            val vib = 1.0 + vibDepth * sin(2 * PI * 5.2 * t)
             val ph = 2 * PI * f * vib * t
-            var v = sin(ph) + 0.55 * sin(ph * 2) + 0.30 * sin(ph * 3) + 0.18 * sin(ph * 4) + 0.10 * sin(ph * 5)
+            // 2枚目リードをわずかにデチューン → うねり（コーラス感）
+            val ph2 = 2 * PI * f * 1.004 * vib * t
+            // フリーリードらしい奇数倍音優位のスペクトル
+            var v = 0.60 * sin(ph) + 0.55 * sin(ph2)
+            v += 0.30 * sin(ph * 3) + 0.16 * sin(ph * 5) + 0.09 * sin(ph * 7)
+            v += 0.12 * sin(ph * 2) + 0.06 * sin(ph * 4)   // 偶数倍音は控えめ
+            // 息のノイズ（ローパス風に平滑化してアタックに乗せる）
+            val white = rnd.nextDouble() * 2 - 1
+            breath += (white - breath) * 0.05
+            val breathEnv = Math.exp(-t * 6) * 0.10
+            v += breath * breathEnv
+            // エンベロープ（やわらかいアタック＋自然なリリース）
             val env = when {
-                t < 0.03 -> t / 0.03
-                t > 0.65 -> ((0.8 - t) / 0.15).coerceAtLeast(0.0)
+                t < 0.04 -> t / 0.04
+                t > 0.72 -> ((0.9 - t) / 0.18).coerceAtLeast(0.0)
                 else -> 1.0
             }
-            out[i] = (v * 0.22 * env * 32767).toInt().toShort()
+            out[i] = (v * 0.20 * env * 32767).coerceIn(-32767.0, 32767.0).toInt().toShort()
         }
         return out
     }

@@ -1,4 +1,4 @@
-# GakkiApp（がっきれんしゅう） HANDOFF v1.2.1
+# GakkiApp（がっきれんしゅう） HANDOFF v1.3
 
 子供向け楽器練習アプリ。Termuxのみ・GitHub ActionsでAPKビルド。
 
@@ -10,13 +10,14 @@
   - **本プロジェクト専用に新規生成**（SignApp共有keystoreではない）。以後のアップデートZIPには含めない
 - リポジトリ: Sekiguchi-Takashi / GakkiApp（作成時 private 推奨）
 - ⚠️ `git init` は必ず `~/GakkiApp` 内で実行（ホームで実行するとGH013でトークン露出リスク）
+- ⚠️ Kotlin: **inner class の中に data class を定義しない**（`Class is not allowed here`でビルド失敗）。データ保持クラスはトップレベルへ
 
 ## ファイル構成
 ```
 .github/workflows/build.yml      … Gradle 8.9 pinned, JDK17, artifact: GakkiApp-debug
 settings.gradle.kts / build.gradle.kts / app/build.gradle.kts
 app/debug.keystore
-app/src/main/AndroidManifest.xml … Main(portrait) / Tambourine(portrait) / Harmonica(landscape)
+app/src/main/AndroidManifest.xml … 全Activity portrait。アイコン=カスタネットのadaptive-icon
 app/src/main/java/com/appathy/gakki/
   Music.kt            … 曲データ＋合成エンジン＋SongPlayer
   InstrumentArt.kt    … 4楽器＋子供のCanvasイラスト
@@ -32,7 +33,9 @@ app/src/main/java/com/appathy/gakki/
 - 22050Hz mono 16bit を起動時にフルプリレンダ（メロディ＋ベース伴奏）
   - レンダに数秒かかる端末あり（既知。改善するならバックグラウンドレンダ化）
 - `tambourineBeats`: 各小節の1・3拍目（テンポに追従、判定窓はms固定なので低速ほど易しい）
-- 木琴音: `renderXylophone(semi)` マリンバ風（4倍音強め・速い減衰）。鍵盤は `xyloSemis`=ド〜上のド8枚, `xyloIndexOf(semi)`
+- 木琴音: `renderXylophone(semi)` マリンバ風。鍵盤は `xyloSemis`=ド〜上のド8枚, `xyloIndexOf(semi)`
+- `renderSong(muteMelodyOnOddPhrase, tempo=1.0)`: tempo倍率で全ノート時刻をスケール（木琴の初級0.85/中級1.15で使用）
+- ハーモニカ音は v1.3 で刷新: octave4・2枚リードのデチューンうねり・奇数倍音優位・息ノイズ（`renderHarmonica`）
 - フレーズ = 2小節（4.8秒 ≒「5秒」）。**奇数フレーズがハーモニカ区間**
 - タンバリン音: ノイズ＋ジングル合成 / ハーモニカ音: 倍音＋ビブラート合成
 - 効果音は `playOneShot`（MODE_STATIC、マーカーで自動release）
@@ -67,19 +70,24 @@ app/src/main/java/com/appathy/gakki/
 - 画面上部に吹く音のドレミ列を常時表示（お手本中は次フレーズを予告）。吹けた音は緑丸＋白文字に変化、今の音は赤点滅
 - 自分の番→お手本への切り替わりで1.2秒、子供が**横を向いて息を吸う**（`InstrumentArt.CHILD_INHALE`: canvas左右反転＋開いた口＋吸気線）
 
-## 木琴画面（v1.2〜・縦向き）
-- 下部に8枚の色付き鍵盤（ド〜上のド、`XylophoneActivity`）。トップの4楽器すべて遷移実装済み（Toast廃止）
-- 上から音符が落下（`melody`から木琴で叩ける音のみ抽出、`FALL_MS`=2000で上端→判定リング）
-- 各レーンの木琴の少し上に**丸い判定枠**。音符が枠に重なった窓（-500〜+400ms）で同じレーンの鍵盤をタップ=ヒット
-- 初級=外すと停止（その音の鍵盤を叩くと再開）／中級=止まらない
+## 木琴画面（v1.3・縦向き）
+- 下部に8枚の色付き鍵盤（ド〜上のド、`XylophoneActivity`）
+- 上から音符が落下（`melody`から木琴音のみ、時刻をtempoでスケール、`FALL_MS`=2000で上端→判定リング）
+- 各レーンの少し上に**丸い判定枠**。窓（-500〜+400ms）で同レーンの鍵盤タップ=ヒット
+- **停止なし**（初級の停止ロジックは廃止）。難易度はテンポ差のみ: 初級=0.85倍（ゆっくり）／中級=1.15倍（少し速い）
+- 「ここで叩く」等の案内テキストは削除、上部はスコアのみ
 
-## ハーモニカ v1.2 変更（難易度緩和）
-- 子供の**頭は固定**（息を吸うとき左右反転しない。正面のまま口を開け吸気線を内向きに）
-- スワイプ改善: 指移動を`SWIPE_GAIN`=1.8倍して`harmTargetX`へ加算＝少しの動きで大きく動く。`harmX`は毎フレーム35%補間で滑らかに追従
-- 曲を76BPMに落として全体的に易しく
+## ハーモニカ画面（v1.3で全面刷新・縦向き）
+- **子供（人）は廃止**。ハーモニカ本体を画面中央に**固定**配置（8穴 ド〜ド、音名表示）
+- 代わりに青い「ふく」バーをスワイプで左右に動かす。バーを目的の穴の位置へ持っていき **300ms静止** → その穴に息が入って発音
+- スワイプ: `SWIPE_GAIN`=1.8倍＋毎フレーム35%補間（v1.2の滑らかさを踏襲）。バーは `barX`/`barTargetX`
+- 上部にドレミ列（吹けた=緑丸+白、今の音=赤点滅）。目標穴はハーモニカ上でも赤点滅
+- 初級=自分の番の終わりまでに吹き終えないと停止→赤い穴を全部吹くと再開／中級=止まらない
+- InstrumentArt.child系はハーモニカからは未使用（コードは残置）
 
 ## バージョン履歴
 - v1.0 初版（トップ＋タンバリン初級/中級＋ハーモニカ）
 - v1.1 カスタネット追加（ゆっくり連打）／タンバリン上級（スワイプでゆらす）／ハーモニカ初級・中級＋ドレミ表示＋息継ぎアニメ
 - v1.2 木琴追加（落下音符＋判定枠、初級/中級）／ハーモニカ頭固定＋スワイプ感度と滑らかさ向上／曲を76BPMにゆっくり化
-- v1.2.1 ビルド修正: 木琴の音符データ`XyloNote`をinner class内のdata classからトップレベルclassへ移動（v1.2ビルド失敗の対処）
+- v1.2.1 ビルド修正: `XyloNote`をトップレベルclassへ（inner class内data class禁止）
+- v1.3 木琴=停止廃止しテンポ差のみ（初級遅い/中級速い）・案内文削除／ハーモニカ=人を廃止しハーモニカ固定+ふくバーをスワイプ／音色刷新／アプリアイコンをカスタネットに

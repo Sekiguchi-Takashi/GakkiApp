@@ -4,7 +4,8 @@
     <application
         android:label="がっきれんしゅう"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
-        android:icon="@android:drawable/ic_media_play">
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
 
         <activity
             android:name=".MainActivity"
@@ -34,7 +35,7 @@
         <activity
             android:name=".HarmonicaActivity"
             android:exported="false"
-            android:screenOrientation="landscape" />
+            android:screenOrientation="portrait" />
 
     </application>
 </manifest>
