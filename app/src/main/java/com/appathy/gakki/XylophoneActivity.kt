@@ -96,16 +96,15 @@ class XylophoneActivity : Activity() {
         private val xyloPcm = HashMap<Int, ShortArray>()
 
         // 落ちてくる音符（melodyから、木琴で叩ける音のみ）
-        private data class Note(val time: Int, val lane: Int, var hit: Boolean = false, var missed: Boolean = false)
-        private val notes: List<Note> by lazy {
+        private val notes: List<XyloNote> by lazy {
             Music.melody.mapNotNull { (t, semi, _) ->
                 val lane = Music.xyloIndexOf(semi)
-                if (lane >= 0) Note(t, lane) else null
+                if (lane >= 0) XyloNote(t, lane) else null
             }.sortedBy { it.time }
         }
         private var nextIdx = 0          // まだ判定窓に達していない先頭
         var waiting = false              // 初級: 停止中（この音を待つ）
-        private var waitingNote: Note? = null
+        private var waitingNote: XyloNote? = null
         private var score = 0
         private var finished = false
         private val flash = LongArray(8) // 各鍵盤のヒット演出終了時刻
@@ -314,3 +313,6 @@ class XylophoneActivity : Activity() {
         private fun dpF(v: Float): Float = v * resources.displayMetrics.density
     }
 }
+
+/** 落下音符（トップレベル定義） */
+class XyloNote(val time: Int, val lane: Int, var hit: Boolean = false, var missed: Boolean = false)

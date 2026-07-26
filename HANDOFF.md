@@ -1,4 +1,4 @@
-# GakkiApp（がっきれんしゅう） HANDOFF v1.2
+# GakkiApp（がっきれんしゅう） HANDOFF v1.2.1
 
 子供向け楽器練習アプリ。Termuxのみ・GitHub ActionsでAPKビルド。
 
@@ -82,3 +82,4 @@ app/src/main/java/com/appathy/gakki/
 - v1.0 初版（トップ＋タンバリン初級/中級＋ハーモニカ）
 - v1.1 カスタネット追加（ゆっくり連打）／タンバリン上級（スワイプでゆらす）／ハーモニカ初級・中級＋ドレミ表示＋息継ぎアニメ
 - v1.2 木琴追加（落下音符＋判定枠、初級/中級）／ハーモニカ頭固定＋スワイプ感度と滑らかさ向上／曲を76BPMにゆっくり化
+- v1.2.1 ビルド修正: 木琴の音符データ`XyloNote`をinner class内のdata classからトップレベルclassへ移動（v1.2ビルド失敗の対処）
