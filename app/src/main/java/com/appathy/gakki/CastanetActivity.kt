@@ -85,7 +85,7 @@ class CastanetActivity : Activity() {
         private val castPcm = Music.renderCastanet()
 
         // (開始ms, 回数, 間隔ms)
-        private val groups = Music.castanetGroups
+        private val groups = Music.current.castanetGroups
         private var gIdx = 0
         private var tapped = 0           // 現在グループで叩けた回数
         var waiting = false              // 初級: 停止中

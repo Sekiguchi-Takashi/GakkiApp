@@ -13,90 +13,129 @@ import kotlin.math.sin
  */
 object Music {
     const val SR = 22050              // サンプルレート
-    const val BPM = 76                 // v1.2: ゆっくりに（100→76）難易度を下げる
-    const val BEAT_MS = 60000 / BPM   // 789ms
-    const val MEAS_MS = BEAT_MS * 4   // 1小節 約3.16秒
-    const val PHRASE_MEAS = 2         // ハーモニカ交互区間 = 2小節 ≒ 4.8秒
-    const val PHRASE_MS = MEAS_MS * PHRASE_MEAS
+    const val PHRASE_MEAS = 2         // ハーモニカ交互区間 = 2小節
 
-    // きらきら星 1周（12小節）。Pair(半音番号: C=0 D=2 E=4 F=5 G=7 A=9 / -1=休符, 拍数)
-    private val VERSE: List<Pair<Int, Int>> = listOf(
-        0 to 1, 0 to 1, 7 to 1, 7 to 1,   // ドドソソ
-        9 to 1, 9 to 1, 7 to 2,           // ララソー
-        5 to 1, 5 to 1, 4 to 1, 4 to 1,   // ファファミミ
-        2 to 1, 2 to 1, 0 to 2,           // レレドー
-        7 to 1, 7 to 1, 5 to 1, 5 to 1,   // ソソファファ
-        4 to 1, 4 to 1, 2 to 2,           // ミミレー
+    // ---- 曲定義（すべてパブリックドメイン） ----
+    // VERSE: Pair(半音番号 C=0 D=2 E=4 F=5 G=7 A=9 B=11 上C=12 / -1=休符, 拍数)
+    class Song(
+        val id: String,
+        val title: String,
+        val bpm: Int,
+        val verse: List<Pair<Int, Int>>,   // 1周分
+        val verseMeas: Int,                 // 1周の小節数
+        val loops: Int
+    ) {
+        val beatMs = 60000 / bpm
+        val measMs = beatMs * 4
+        val phraseMs = measMs * PHRASE_MEAS
+        val totalMeas = verseMeas * loops
+        val totalMs = totalMeas * measMs
+
+        /** 全曲メロディ (開始ms, 半音, 長さms) */
+        val melody: List<Triple<Int, Int, Int>> by lazy {
+            val out = ArrayList<Triple<Int, Int, Int>>()
+            for (loop in 0 until loops) {
+                var t = loop * verseMeas * measMs
+                for ((semi, beats) in verse) {
+                    if (semi >= 0) out.add(Triple(t, semi, beats * beatMs))
+                    t += beats * beatMs
+                }
+            }
+            out
+        }
+
+        /** タンバリン: 各小節の1・3拍目 */
+        val tambourineBeats: List<Int> by lazy {
+            val out = ArrayList<Int>()
+            for (m in 0 until totalMeas) {
+                out.add(m * measMs)
+                out.add(m * measMs + 2 * beatMs)
+            }
+            out
+        }
+
+        /** タンバリン上級: (時刻, ゆらす=true)。偶数小節の3拍目がスワイプ */
+        val tambourineBeatsAdvanced: List<Pair<Int, Boolean>> by lazy {
+            val out = ArrayList<Pair<Int, Boolean>>()
+            for (m in 0 until totalMeas) {
+                out.add(m * measMs to false)
+                out.add((m * measMs + 2 * beatMs) to (m % 2 == 1))
+            }
+            out
+        }
+
+        /** カスタネット: (開始ms, 回数, 間隔ms)。各周の6・12小節目相当が「ゆっくり×4」 */
+        val castanetGroups: List<Triple<Int, Int, Int>> by lazy {
+            val out = ArrayList<Triple<Int, Int, Int>>()
+            val a = verseMeas / 2 - 1
+            val b = verseMeas - 1
+            for (m in 0 until totalMeas) {
+                val inVerse = m % verseMeas
+                if (inVerse == a || inVerse == b) {
+                    out.add(Triple(m * measMs, 4, beatMs))
+                } else {
+                    out.add(Triple(m * measMs, 1, 0))
+                    out.add(Triple(m * measMs + 2 * beatMs, 1, 0))
+                }
+            }
+            out
+        }
+
+        fun phraseOf(posMs: Int) = posMs / phraseMs
+        fun isHarmonicaPhrase(phrase: Int) = phrase % 2 == 1
+
+        fun notesInPhrase(phrase: Int): List<Triple<Int, Int, Int>> {
+            val s = phrase * phraseMs
+            val e = s + phraseMs
+            return melody.filter { it.first in s until e }
+        }
+    }
+
+    // きらきら星（12小節）
+    private val TWINKLE = Song("twinkle", "きらきらぼし", 76, listOf(
+        0 to 1, 0 to 1, 7 to 1, 7 to 1,
+        9 to 1, 9 to 1, 7 to 2,
+        5 to 1, 5 to 1, 4 to 1, 4 to 1,
+        2 to 1, 2 to 1, 0 to 2,
+        7 to 1, 7 to 1, 5 to 1, 5 to 1,
+        4 to 1, 4 to 1, 2 to 2,
         7 to 1, 7 to 1, 5 to 1, 5 to 1,
         4 to 1, 4 to 1, 2 to 2,
         0 to 1, 0 to 1, 7 to 1, 7 to 1,
         9 to 1, 9 to 1, 7 to 2,
         5 to 1, 5 to 1, 4 to 1, 4 to 1,
         2 to 1, 2 to 1, 0 to 2
-    )
-    const val VERSE_MEAS = 12
-    const val LOOPS = 5                              // v1.2: 76BPM×5周 ≒ 189秒（約3分）
-    const val TOTAL_MEAS = VERSE_MEAS * LOOPS        // 60小節
-    const val TOTAL_MS = TOTAL_MEAS * MEAS_MS
+    ), 12, 5)
 
-    /** 全曲のメロディを (開始ms, 半音, 長さms) で展開 */
-    val melody: List<Triple<Int, Int, Int>> by lazy {
-        val out = ArrayList<Triple<Int, Int, Int>>()
-        for (loop in 0 until LOOPS) {
-            var t = loop * VERSE_MEAS * MEAS_MS
-            for ((semi, beats) in VERSE) {
-                if (semi >= 0) out.add(Triple(t, semi, beats * BEAT_MS))
-                t += beats * BEAT_MS
-            }
-        }
-        out
-    }
+    // メリーさんのひつじ（8小節）ミレドレ ミミミー…
+    private val MARY = Song("mary", "メリーさんのひつじ", 84, listOf(
+        4 to 1, 2 to 1, 0 to 1, 2 to 1,   // ミレドレ
+        4 to 1, 4 to 1, 4 to 2,           // ミミミー
+        2 to 1, 2 to 1, 2 to 2,           // レレレー
+        4 to 1, 7 to 1, 7 to 2,           // ミソソー
+        4 to 1, 2 to 1, 0 to 1, 2 to 1,   // ミレドレ
+        4 to 1, 4 to 1, 4 to 1, 4 to 1,   // ミミミミ
+        2 to 1, 2 to 1, 4 to 1, 2 to 1,   // レレミレ
+        0 to 4                            // ドーーー
+    ), 8, 7)
 
-    /** タンバリンを叩くタイミング: 各小節の1拍目と3拍目 */
-    val tambourineBeats: List<Int> by lazy {
-        val out = ArrayList<Int>()
-        for (m in 0 until TOTAL_MEAS) {
-            out.add(m * MEAS_MS)
-            out.add(m * MEAS_MS + 2 * BEAT_MS)
-        }
-        out
-    }
+    // ちょうちょう（8小節）ソミミ ファレレ…
+    private val CHOUCHOU = Song("chou", "ちょうちょう", 80, listOf(
+        7 to 1, 4 to 1, 4 to 2,           // ソミミー
+        5 to 1, 2 to 1, 2 to 2,           // ファレレー
+        0 to 1, 2 to 1, 4 to 1, 5 to 1,   // ドレミファ
+        7 to 1, 7 to 1, 7 to 2,           // ソソソー
+        7 to 1, 4 to 1, 4 to 1, 4 to 1,   // ソミミミ
+        5 to 1, 2 to 1, 2 to 1, 2 to 1,   // ファレレレ
+        0 to 1, 4 to 1, 7 to 1, 7 to 1,   // ドミソソ
+        4 to 4                            // ミーーー
+    ), 8, 7)
 
-    /** タンバリン上級: (時刻ms, ゆらす=true)。偶数小節の3拍目がスワイプ */
-    val tambourineBeatsAdvanced: List<Pair<Int, Boolean>> by lazy {
-        val out = ArrayList<Pair<Int, Boolean>>()
-        for (m in 0 until TOTAL_MEAS) {
-            out.add(m * MEAS_MS to false)
-            out.add((m * MEAS_MS + 2 * BEAT_MS) to (m % 2 == 1))
-        }
-        out
-    }
+    val songs = listOf(TWINKLE, MARY, CHOUCHOU)
+    fun songById(id: String): Song = songs.firstOrNull { it.id == id } ?: TWINKLE
 
-    /** カスタネット: (開始ms, 回数, 間隔ms)。回数1=単発。各周の6・12小節目は「ゆっくり×4」連打 */
-    val castanetGroups: List<Triple<Int, Int, Int>> by lazy {
-        val out = ArrayList<Triple<Int, Int, Int>>()
-        for (m in 0 until TOTAL_MEAS) {
-            val inVerse = m % VERSE_MEAS
-            if (inVerse == 5 || inVerse == 11) {
-                out.add(Triple(m * MEAS_MS, 4, BEAT_MS))   // ゆっくり×4（1拍間隔）
-            } else {
-                out.add(Triple(m * MEAS_MS, 1, 0))
-                out.add(Triple(m * MEAS_MS + 2 * BEAT_MS, 1, 0))
-            }
-        }
-        out
-    }
-
-    /** phrase番号(2小節単位)。奇数がハーモニカ区間 */
-    fun phraseOf(posMs: Int) = posMs / PHRASE_MS
-    fun isHarmonicaPhrase(phrase: Int) = phrase % 2 == 1
-
-    /** 指定phrase内のメロディ音符（ハーモニカ課題用） */
-    fun notesInPhrase(phrase: Int): List<Triple<Int, Int, Int>> {
-        val s = phrase * PHRASE_MS
-        val e = s + PHRASE_MS
-        return melody.filter { it.first in s until e }
-    }
+    /** 現在選択中の曲（トップで選択、各Activityが参照） */
+    var current: Song = TWINKLE
 
     /** 木琴の鍵盤（ド〜上のド の8枚）に使う半音 */
     val xyloSemis = intArrayOf(0, 2, 4, 5, 7, 9, 11, 12)
@@ -111,22 +150,23 @@ object Music {
      * tempo: 再生速度倍率（1.0=標準, 1.2=速い, 0.85=遅い）。木琴の初級/中級で使用
      */
     fun renderSong(muteMelodyOnOddPhrase: Boolean, tempo: Double = 1.0): ShortArray {
-        val scaledTotalMs = (TOTAL_MS / tempo).toInt()
+        val song = current
+        val scaledTotalMs = (song.totalMs / tempo).toInt()
         val total = (scaledTotalMs.toLong() * SR / 1000).toInt()
         val buf = FloatArray(total)
 
         fun sc(ms: Int) = (ms / tempo).toInt()
 
         // ベース伴奏: 各小節 1・3拍目に低いド、2・4拍目にソ
-        for (m in 0 until TOTAL_MEAS) {
+        for (m in 0 until song.totalMeas) {
             for (b in 0 until 4) {
                 val semi = if (b % 2 == 0) 0 else 7
-                addTone(buf, sc(m * MEAS_MS + b * BEAT_MS), sc(BEAT_MS), freq(semi, 3), 0.18f, bass = true)
+                addTone(buf, sc(m * song.measMs + b * song.beatMs), sc(song.beatMs), freq(semi, 3), 0.18f, bass = true)
             }
         }
         // メロディ
-        for ((t, semi, dur) in melody) {
-            if (muteMelodyOnOddPhrase && isHarmonicaPhrase(phraseOf(t))) continue
+        for ((t, semi, dur) in song.melody) {
+            if (muteMelodyOnOddPhrase && song.isHarmonicaPhrase(song.phraseOf(t))) continue
             addTone(buf, sc(t), sc(dur), freq(semi, 5), 0.30f, bass = false)
         }
         // クリップしてshort化
@@ -230,37 +270,26 @@ object Music {
         return out
     }
 
-    /** ハーモニカ音（フリーリード風: 2枚のリードのうねり＋息＋奇数倍音） 900ms */
+    /** ハーモニカ音（v1.4: やわらかい笛系トーン。基音中心＋軽いトレモロ、耳当たり重視） 850ms */
     fun renderHarmonica(semi: Int): ShortArray {
-        val n = SR * 9 / 10
+        val n = SR * 17 / 20
         val out = ShortArray(n)
-        val f = freq(semi, 4)                 // 肉厚に聞こえる音域へ（甲高さを抑える）
-        val rnd = java.util.Random(semi * 131 + 7L)
-        var breath = 0.0
+        val f = freq(semi, 5)
         for (i in 0 until n) {
             val t = i.toDouble() / SR
-            // 自然なビブラート（立ち上がりは浅く、後半で深く）
-            val vibDepth = 0.004 + 0.004 * (t / 0.9).coerceAtMost(1.0)
-            val vib = 1.0 + vibDepth * sin(2 * PI * 5.2 * t)
-            val ph = 2 * PI * f * vib * t
-            // 2枚目リードをわずかにデチューン → うねり（コーラス感）
-            val ph2 = 2 * PI * f * 1.004 * vib * t
-            // フリーリードらしい奇数倍音優位のスペクトル
-            var v = 0.60 * sin(ph) + 0.55 * sin(ph2)
-            v += 0.30 * sin(ph * 3) + 0.16 * sin(ph * 5) + 0.09 * sin(ph * 7)
-            v += 0.12 * sin(ph * 2) + 0.06 * sin(ph * 4)   // 偶数倍音は控えめ
-            // 息のノイズ（ローパス風に平滑化してアタックに乗せる）
-            val white = rnd.nextDouble() * 2 - 1
-            breath += (white - breath) * 0.05
-            val breathEnv = Math.exp(-t * 6) * 0.10
-            v += breath * breathEnv
-            // エンベロープ（やわらかいアタック＋自然なリリース）
+            // ゆるやかなトレモロ（音量が軽く揺れる）
+            val trem = 1.0 + 0.08 * sin(2 * PI * 5.0 * t)
+            // 基音中心、2倍音を軽く、3倍音はごく僅か（澄んだ笛の音）
+            val ph = 2 * PI * f * t
+            var v = sin(ph) + 0.22 * sin(ph * 2) + 0.06 * sin(ph * 3)
+            v *= trem
+            // やわらかいアタックとリリース
             val env = when {
-                t < 0.04 -> t / 0.04
-                t > 0.72 -> ((0.9 - t) / 0.18).coerceAtLeast(0.0)
+                t < 0.05 -> t / 0.05
+                t > 0.68 -> ((0.85 - t) / 0.17).coerceAtLeast(0.0)
                 else -> 1.0
             }
-            out[i] = (v * 0.20 * env * 32767).coerceIn(-32767.0, 32767.0).toInt().toShort()
+            out[i] = (v * 0.26 * env * 32767).coerceIn(-32767.0, 32767.0).toInt().toShort()
         }
         return out
     }

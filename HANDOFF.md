@@ -1,4 +1,4 @@
-# GakkiApp（がっきれんしゅう） HANDOFF v1.3
+# GakkiApp（がっきれんしゅう） HANDOFF v1.4
 
 子供向け楽器練習アプリ。Termuxのみ・GitHub ActionsでAPKビルド。
 
@@ -21,7 +21,7 @@ app/src/main/AndroidManifest.xml … 全Activity portrait。アイコン=カス�
 app/src/main/java/com/appathy/gakki/
   Music.kt            … 曲データ＋合成エンジン＋SongPlayer
   InstrumentArt.kt    … 4楽器＋子供のCanvasイラスト
-  MainActivity.kt     … トップ2×2グリッド
+  MainActivity.kt     … トップ: 曲選択チップ＋楽器2×2グリッド（build()で再描画）
   TambourineActivity.kt
   HarmonicaActivity.kt
   CastanetActivity.kt
@@ -29,13 +29,15 @@ app/src/main/java/com/appathy/gakki/
 ```
 
 ## 音楽仕様（Music.kt）
-- 曲: **きらきら星**（パブリックドメイン）**76BPM**（v1.2でゆっくり化）・12小節/周 ×5周 ≒ **189秒（約3分）**
+- 曲は3曲から選択（`Music.songs`／すべてパブリックドメイン）: きらきらぼし(76BPM,12小節×5) / メリーさんのひつじ(84BPM,8小節×7) / ちょうちょう(80BPM,8小節×7)
+- **曲データは`Music.Song`クラスに集約**。melody/tambourineBeats/tambourineBeatsAdvanced/castanetGroups/phraseOf/isHarmonicaPhrase/notesInPhrase/各種ms定数はSongのメンバ
+- 選択中の曲は`Music.current`（トップ画面で選択）。各Activityは`Music.current.xxx`を参照。`renderSong`も`Music.current`を使用
 - 22050Hz mono 16bit を起動時にフルプリレンダ（メロディ＋ベース伴奏）
   - レンダに数秒かかる端末あり（既知。改善するならバックグラウンドレンダ化）
 - `tambourineBeats`: 各小節の1・3拍目（テンポに追従、判定窓はms固定なので低速ほど易しい）
 - 木琴音: `renderXylophone(semi)` マリンバ風。鍵盤は `xyloSemis`=ド〜上のド8枚, `xyloIndexOf(semi)`
 - `renderSong(muteMelodyOnOddPhrase, tempo=1.0)`: tempo倍率で全ノート時刻をスケール（木琴の初級0.85/中級1.15で使用）
-- ハーモニカ音は v1.3 で刷新: octave4・2枚リードのデチューンうねり・奇数倍音優位・息ノイズ（`renderHarmonica`）
+- ハーモニカ音は v1.4 で再刷新: octave5・基音中心のやわらかい笛系トーン＋軽いトレモロ（`renderHarmonica`）。v1.3のリード合成は違和感があり差し替え
 - フレーズ = 2小節（4.8秒 ≒「5秒」）。**奇数フレーズがハーモニカ区間**
 - タンバリン音: ノイズ＋ジングル合成 / ハーモニカ音: 倍音＋ビブラート合成
 - 効果音は `playOneShot`（MODE_STATIC、マーカーで自動release）
@@ -91,3 +93,4 @@ app/src/main/java/com/appathy/gakki/
 - v1.2 木琴追加（落下音符＋判定枠、初級/中級）／ハーモニカ頭固定＋スワイプ感度と滑らかさ向上／曲を76BPMにゆっくり化
 - v1.2.1 ビルド修正: `XyloNote`をトップレベルclassへ（inner class内data class禁止）
 - v1.3 木琴=停止廃止しテンポ差のみ（初級遅い/中級速い）・案内文削除／ハーモニカ=人を廃止しハーモニカ固定+ふくバーをスワイプ／音色刷新／アプリアイコンをカスタネットに
+- v1.4 新曲2曲追加（メリーさんのひつじ／ちょうちょう）＋トップで曲選択（`Music.Song`にリファクタ、`Music.current`で共有）／ハーモニカ音をやわらかい笛系に再刷新

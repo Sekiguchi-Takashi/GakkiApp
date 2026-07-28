@@ -96,7 +96,7 @@ class XylophoneActivity : Activity() {
 
         // 落ちてくる音符（melodyから木琴で叩ける音のみ、時刻はtempoでスケール）
         private val notes: List<XyloNote> by lazy {
-            Music.melody.mapNotNull { (t, semi, _) ->
+            Music.current.melody.mapNotNull { (t, semi, _) ->
                 val lane = Music.xyloIndexOf(semi)
                 if (lane >= 0) XyloNote((t / tempo).toInt(), lane) else null
             }.sortedBy { it.time }

@@ -187,21 +187,21 @@ class HarmonicaActivity : Activity() {
             barX += (barTargetX - barX) * 0.35f
             if (abs(barTargetX - barX) < 0.5f) barX = barTargetX
 
-            val phrase = Music.phraseOf(pos)
-            val harmonicaTurn = !finished && (Music.isHarmonicaPhrase(phrase) || pausedForTask)
+            val phrase = Music.current.phraseOf(pos)
+            val harmonicaTurn = !finished && (Music.current.isHarmonicaPhrase(phrase) || pausedForTask)
 
-            if (!pausedForTask && Music.isHarmonicaPhrase(phrase) && phrase != taskPhrase && !finished) {
+            if (!pausedForTask && Music.current.isHarmonicaPhrase(phrase) && phrase != taskPhrase && !finished) {
                 taskPhrase = phrase
-                taskNotes = Music.notesInPhrase(phrase - 1)
+                taskNotes = Music.current.notesInPhrase(phrase - 1)
                 taskIdx = 0
                 firedHole = -1
             }
 
             // 初級: 区間終わりまでに吹き終えていなければ停止
             if (beginner && p != null && !pausedForTask && !finished &&
-                Music.isHarmonicaPhrase(phrase) && phrase == taskPhrase &&
+                Music.current.isHarmonicaPhrase(phrase) && phrase == taskPhrase &&
                 taskIdx < taskNotes.size &&
-                pos >= (phrase + 1) * Music.PHRASE_MS - 120
+                pos >= (phrase + 1) * Music.current.phraseMs - 120
             ) {
                 pausedForTask = true
                 p.pause()
@@ -235,7 +235,7 @@ class HarmonicaActivity : Activity() {
 
             // ---- 上部: 吹く音のドレミ列 ----
             val stripNotes = if (harmonicaTurn) taskNotes
-                             else if (!finished) Music.notesInPhrase(phrase) else emptyList()
+                             else if (!finished) Music.current.notesInPhrase(phrase) else emptyList()
             val stripProgress = if (harmonicaTurn) taskIdx else 0
             if (stripNotes.isNotEmpty()) {
                 paint.textAlign = Paint.Align.CENTER

@@ -94,8 +94,8 @@ class TambourineActivity : Activity() {
 
         // (時刻, ゆらす=true)。初級・中級は全てたたく
         private val beats: List<Pair<Int, Boolean>> =
-            if (level == 2) Music.tambourineBeatsAdvanced
-            else Music.tambourineBeats.map { it to false }
+            if (level == 2) Music.current.tambourineBeatsAdvanced
+            else Music.current.tambourineBeats.map { it to false }
 
         private var beatIdx = 0
         var waitingTap = false

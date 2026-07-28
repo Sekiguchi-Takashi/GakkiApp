@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -14,14 +15,21 @@ import android.widget.TextView
 
 class MainActivity : Activity() {
 
+    private lateinit var root: LinearLayout
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val root = LinearLayout(this).apply {
+        root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(255, 250, 235))
             setPadding(dp(16), dp(24), dp(16), dp(16))
         }
+        setContentView(root)
+        build()
+    }
+
+    private fun build() {
+        root.removeAllViews()
 
         root.addView(TextView(this).apply {
             text = "🎵 がっきれんしゅう"
@@ -30,12 +38,52 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, dp(8))
         })
+
+        // ---- 曲選択 ----
+        root.addView(TextView(this).apply {
+            text = "きょくを えらぶ"
+            textSize = 15f
+            setTextColor(Color.rgb(140, 120, 100))
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, dp(6))
+        })
+        val songRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        for (song in Music.songs) {
+            val selected = song.id == Music.current.id
+            songRow.addView(TextView(this).apply {
+                text = song.title
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(dp(10), dp(10), dp(10), dp(10))
+                setTextColor(if (selected) Color.WHITE else Color.rgb(120, 90, 60))
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(20).toFloat()
+                    setColor(if (selected) Color.rgb(255, 150, 60) else Color.rgb(255, 235, 210))
+                }
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    setMargins(dp(4), 0, dp(4), 0)
+                }
+                setOnClickListener {
+                    Music.current = song
+                    build()
+                }
+            })
+        }
+        root.addView(songRow)
+
         root.addView(TextView(this).apply {
             text = "すきな がっきを えらんでね"
             textSize = 16f
             setTextColor(Color.rgb(140, 120, 100))
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, dp(16))
+            setPadding(0, dp(14), 0, dp(12))
         })
 
         fun row() = LinearLayout(this).apply {
@@ -63,10 +111,8 @@ class MainActivity : Activity() {
 
         root.addView(row1)
         root.addView(row2)
-        setContentView(root)
     }
 
-    /** 楽器カード（イラスト＋名前） */
     private fun card(kind: Int, label: String, onTap: () -> Unit): View {
         val ctx = this
         val col = LinearLayout(ctx).apply {
