@@ -78,6 +78,45 @@ class MainActivity : Activity() {
         }
         root.addView(songRow)
 
+        // ---- サウンド A/B 切替 ----
+        root.addView(TextView(this).apply {
+            text = "おとを えらぶ"
+            textSize = 15f
+            setTextColor(Color.rgb(140, 120, 100))
+            gravity = Gravity.CENTER
+            setPadding(0, dp(10), 0, dp(6))
+        })
+        val soundRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        for (bank in 0..1) {
+            val selected = bank == Music.soundBank
+            soundRow.addView(TextView(this).apply {
+                text = Music.soundBankNames[bank]
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(dp(10), dp(10), dp(10), dp(10))
+                setTextColor(if (selected) Color.WHITE else Color.rgb(70, 110, 130))
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(20).toFloat()
+                    setColor(if (selected) Color.rgb(70, 160, 200) else Color.rgb(215, 238, 245))
+                }
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    setMargins(dp(4), 0, dp(4), 0)
+                }
+                setOnClickListener {
+                    Music.soundBank = bank
+                    build()
+                }
+            })
+        }
+        root.addView(soundRow)
+
         root.addView(TextView(this).apply {
             text = "すきな がっきを えらんでね"
             textSize = 16f

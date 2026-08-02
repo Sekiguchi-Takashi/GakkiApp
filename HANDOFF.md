@@ -1,4 +1,4 @@
-# GakkiApp（がっきれんしゅう） HANDOFF v1.4
+# GakkiApp（がっきれんしゅう） HANDOFF v1.5
 
 子供向け楽器練習アプリ。Termuxのみ・GitHub ActionsでAPKビルド。
 
@@ -21,7 +21,7 @@ app/src/main/AndroidManifest.xml … 全Activity portrait。アイコン=カス�
 app/src/main/java/com/appathy/gakki/
   Music.kt            … 曲データ＋合成エンジン＋SongPlayer
   InstrumentArt.kt    … 4楽器＋子供のCanvasイラスト
-  MainActivity.kt     … トップ: 曲選択チップ＋楽器2×2グリッド（build()で再描画）
+  MainActivity.kt     … トップ: 曲選択チップ＋サウンドA/Bチップ＋楽器2×2グリッド（build()で再描画）
   TambourineActivity.kt
   HarmonicaActivity.kt
   CastanetActivity.kt
@@ -37,7 +37,14 @@ app/src/main/java/com/appathy/gakki/
 - `tambourineBeats`: 各小節の1・3拍目（テンポに追従、判定窓はms固定なので低速ほど易しい）
 - 木琴音: `renderXylophone(semi)` マリンバ風。鍵盤は `xyloSemis`=ド〜上のド8枚, `xyloIndexOf(semi)`
 - `renderSong(muteMelodyOnOddPhrase, tempo=1.0)`: tempo倍率で全ノート時刻をスケール（木琴の初級0.85/中級1.15で使用）
-- ハーモニカ音は v1.4 で再刷新: octave5・基音中心のやわらかい笛系トーン＋軽いトレモロ（`renderHarmonica`）。v1.3のリード合成は違和感があり差し替え
+- ハーモニカ音Aは v1.4 のやわらかい笛系（`renderHarmonicaA`）
+- **サウンドA/B（`Music.soundBank` 0=A/1=B、トップで選択）**。各`renderXxx()`がbankで内部分岐（`renderXxxA`/`renderXxxB`）、呼び出し側は無変更。全てプログラム合成で外部音源なし
+  - カスタネット: A=木のカチッ / B=低く重い木の打音
+  - タンバリン(叩く): A=ノイズ+ジングル / B=小太鼓（胴鳴り+スナッピー）+薄い金属のチリつき
+  - タンバリン(ゆらす): A=ジングルのシャラシャラ / B=薄い金属が触れ合う高域ノイズ
+  - 木琴: A=マリンバ風 / B=木魚（ポクッ、ピッチ感薄め）
+  - ハーモニカ: A=やわらかい笛系 / B=ラッパ（トランペット風、豊かな倍音+バズ）
+  - 注: 曲の伴奏メロディ(`renderSong`)はbank非依存で共通。音の反映はトップでbank選択→楽器に入り直したとき（プレイ中の動的切替ではない）
 - フレーズ = 2小節（4.8秒 ≒「5秒」）。**奇数フレーズがハーモニカ区間**
 - タンバリン音: ノイズ＋ジングル合成 / ハーモニカ音: 倍音＋ビブラート合成
 - 効果音は `playOneShot`（MODE_STATIC、マーカーで自動release）
@@ -94,3 +101,4 @@ app/src/main/java/com/appathy/gakki/
 - v1.2.1 ビルド修正: `XyloNote`をトップレベルclassへ（inner class内data class禁止）
 - v1.3 木琴=停止廃止しテンポ差のみ（初級遅い/中級速い）・案内文削除／ハーモニカ=人を廃止しハーモニカ固定+ふくバーをスワイプ／音色刷新／アプリアイコンをカスタネットに
 - v1.4 新曲2曲追加（メリーさんのひつじ／ちょうちょう）＋トップで曲選択（`Music.Song`にリファクタ、`Music.current`で共有）／ハーモニカ音をやわらかい笛系に再刷新
+- v1.5 サウンドA/B切替を追加（`Music.soundBank`、トップで選択）。4楽器それぞれにBの音色をプログラム合成で用意（カスタネット=低く重い/タンバリン=小太鼓+薄い金属/木琴=木魚/ハーモニカ=ラッパ）

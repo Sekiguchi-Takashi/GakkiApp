@@ -137,6 +137,10 @@ object Music {
     /** 現在選択中の曲（トップで選択、各Activityが参照） */
     var current: Song = TWINKLE
 
+    /** サウンドバンク: 0=A（デフォルト）, 1=B。トップ画面で切替 */
+    var soundBank: Int = 0
+    val soundBankNames = arrayOf("サウンドA", "サウンドB")
+
     /** 木琴の鍵盤（ド〜上のド の8枚）に使う半音 */
     val xyloSemis = intArrayOf(0, 2, 4, 5, 7, 9, 11, 12)
     fun xyloIndexOf(semi: Int): Int = xyloSemis.indexOf(semi)
@@ -197,7 +201,10 @@ object Music {
     }
 
     /** タンバリン音（ノイズ＋金属ジングル） */
-    fun renderTambourine(): ShortArray {
+    fun renderTambourine(): ShortArray =
+        if (soundBank == 0) renderTambourineA() else renderTambourineB()
+
+    private fun renderTambourineA(): ShortArray {
         val n = SR * 2 / 5  // 400ms
         val out = ShortArray(n)
         val rnd = java.util.Random(7)
@@ -216,8 +223,31 @@ object Music {
         return out
     }
 
+    /** B: 小太鼓を叩いた音（胴の共鳴＋スナッピーのノイズ）＋薄い金属が触れる軽い響き 350ms */
+    private fun renderTambourineB(): ShortArray {
+        val n = SR * 7 / 20
+        val out = ShortArray(n)
+        val rnd = java.util.Random(41)
+        for (i in 0 until n) {
+            val t = i.toDouble() / SR
+            var v = 0.0
+            // 胴の共鳴（低め、200Hz前後の膜の音）
+            v += sin(2 * PI * 190 * t) * Math.exp(-t * 22) * 0.5
+            v += sin(2 * PI * 330 * t) * Math.exp(-t * 26) * 0.3
+            // スナッピー（響き線）: 帯域ノイズが少し伸びる
+            v += (rnd.nextDouble() * 2 - 1) * Math.exp(-t * 30) * 0.6
+            // 薄い金属が触れる軽いチリつき（高域、ごく小さく短い）
+            v += (rnd.nextDouble() * 2 - 1) * Math.exp(-t * 70) * 0.12
+            out[i] = (v.coerceIn(-1.0, 1.0) * 32767 * 0.85).toInt().toShort()
+        }
+        return out
+    }
+
     /** タンバリンを揺らした音（ジングルのみのシャラシャラ 500ms） */
-    fun renderShake(): ShortArray {
+    fun renderShake(): ShortArray =
+        if (soundBank == 0) renderShakeA() else renderShakeB()
+
+    private fun renderShakeA(): ShortArray {
         val n = SR / 2
         val out = ShortArray(n)
         val rnd = java.util.Random(21)
@@ -237,8 +267,31 @@ object Music {
         return out
     }
 
+    /** B: 薄い金属が触れ合う軽い連続音（高域の帯域ノイズが小刻みに）450ms */
+    private fun renderShakeB(): ShortArray {
+        val n = SR * 9 / 20
+        val out = ShortArray(n)
+        val rnd = java.util.Random(63)
+        for (i in 0 until n) {
+            val t = i.toDouble() / SR
+            // 12Hzで細かく触れ合う
+            val tremolo = 0.5 + 0.5 * sin(2 * PI * 12 * t)
+            // 高域寄りのノイズ（前サンプルとの差分で高域を強調）
+            val noise = (rnd.nextDouble() * 2 - 1)
+            var v = noise * 0.5
+            v += sin(2 * PI * 7200 * t) * 0.05
+            v += sin(2 * PI * 9800 * t) * 0.04
+            val env = if (t > 0.30) ((0.45 - t) / 0.15).coerceAtLeast(0.0) else 1.0
+            out[i] = (v * tremolo * env * 32767 * 0.7).coerceIn(-32767.0, 32767.0).toInt().toShort()
+        }
+        return out
+    }
+
     /** カスタネット音（木の短いカチッ 150ms） */
-    fun renderCastanet(): ShortArray {
+    fun renderCastanet(): ShortArray =
+        if (soundBank == 0) renderCastanetA() else renderCastanetB()
+
+    private fun renderCastanetA(): ShortArray {
         val n = SR * 3 / 20
         val out = ShortArray(n)
         val rnd = java.util.Random(3)
@@ -253,8 +306,29 @@ object Music {
         return out
     }
 
+    /** B: より低く重いカスタネット（低め周波数・やや長い減衰） 200ms */
+    private fun renderCastanetB(): ShortArray {
+        val n = SR / 5
+        val out = ShortArray(n)
+        val rnd = java.util.Random(9)
+        for (i in 0 until n) {
+            val t = i.toDouble() / SR
+            var v = 0.0
+            // 低めの木の胴鳴り
+            v += sin(2 * PI * 780 * t) * Math.exp(-t * 34) * 0.8
+            v += sin(2 * PI * 1250 * t) * Math.exp(-t * 45) * 0.4
+            v += sin(2 * PI * 430 * t) * Math.exp(-t * 28) * 0.35   // 重み
+            v += (rnd.nextDouble() * 2 - 1) * Math.exp(-t * 90) * 0.4
+            out[i] = (v.coerceIn(-1.0, 1.0) * 32767 * 0.9).toInt().toShort()
+        }
+        return out
+    }
+
     /** 木琴/マリンバ音（澄んだ木の響き。基音＋4倍音、速い減衰） 600ms */
-    fun renderXylophone(semi: Int): ShortArray {
+    fun renderXylophone(semi: Int): ShortArray =
+        if (soundBank == 0) renderXylophoneA(semi) else renderXylophoneB(semi)
+
+    private fun renderXylophoneA(semi: Int): ShortArray {
         val n = SR * 3 / 5
         val out = ShortArray(n)
         val f = freq(semi, 5)
@@ -270,8 +344,31 @@ object Music {
         return out
     }
 
+    /** B: 木魚（ポクッとした木の打音。ピッチ感薄め、鍵盤ごとにわずかに高さが変わる） 220ms */
+    private fun renderXylophoneB(semi: Int): ShortArray {
+        val n = SR * 11 / 50
+        val out = ShortArray(n)
+        val rnd = java.util.Random(semi * 17 + 5L)
+        // 木魚は音程が曖昧。鍵盤で少しだけ基準を動かす（低め）
+        val base = 220.0 * 2.0.pow(semi / 24.0)   // 半音の半分刻みで緩やかに
+        for (i in 0 until n) {
+            val t = i.toDouble() / SR
+            var v = 0.0
+            // 「ポク」の胴鳴り（低め・急減衰）
+            v += sin(2 * PI * base * t) * Math.exp(-t * 40) * 0.8
+            v += sin(2 * PI * base * 1.6 * t) * Math.exp(-t * 55) * 0.4
+            // 木の打撃ノイズ（アタックのコッという成分）
+            v += (rnd.nextDouble() * 2 - 1) * Math.exp(-t * 130) * 0.5
+            out[i] = (v.coerceIn(-1.0, 1.0) * 32767 * 0.9).toInt().toShort()
+        }
+        return out
+    }
+
     /** ハーモニカ音（v1.4: やわらかい笛系トーン。基音中心＋軽いトレモロ、耳当たり重視） 850ms */
-    fun renderHarmonica(semi: Int): ShortArray {
+    fun renderHarmonica(semi: Int): ShortArray =
+        if (soundBank == 0) renderHarmonicaA(semi) else renderHarmonicaB(semi)
+
+    private fun renderHarmonicaA(semi: Int): ShortArray {
         val n = SR * 17 / 20
         val out = ShortArray(n)
         val f = freq(semi, 5)
@@ -290,6 +387,33 @@ object Music {
                 else -> 1.0
             }
             out[i] = (v * 0.26 * env * 32767).coerceIn(-32767.0, 32767.0).toInt().toShort()
+        }
+        return out
+    }
+
+    /** B: ラッパ（トランペット風。豊かな倍音＋アタックのバズ感＋軽いビブラート） 800ms */
+    private fun renderHarmonicaB(semi: Int): ShortArray {
+        val n = SR * 4 / 5
+        val out = ShortArray(n)
+        val f = freq(semi, 4)                 // ラッパらしい太い音域
+        for (i in 0 until n) {
+            val t = i.toDouble() / SR
+            val vib = 1.0 + 0.005 * sin(2 * PI * 6.0 * t)
+            val ph = 2 * PI * f * vib * t
+            // ブラスは倍音が豊富（1〜6倍音をしっかり）
+            var v = sin(ph)
+            v += 0.7 * sin(ph * 2) + 0.5 * sin(ph * 3) + 0.35 * sin(ph * 4)
+            v += 0.22 * sin(ph * 5) + 0.14 * sin(ph * 6)
+            // アタックのバズ（立ち上がりで高倍音が強く出る）
+            val buzz = Math.exp(-t * 18) * 0.3 * sin(ph * 8)
+            v += buzz
+            // 明瞭なアタック＋持続
+            val env = when {
+                t < 0.02 -> t / 0.02
+                t > 0.7 -> ((0.8 - t) / 0.1).coerceAtLeast(0.0)
+                else -> 0.9 + 0.1 * (t / 0.7)   // じわっと張る
+            }
+            out[i] = (v * 0.14 * env * 32767).coerceIn(-32767.0, 32767.0).toInt().toShort()
         }
         return out
     }
