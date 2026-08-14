@@ -1,4 +1,4 @@
-# GakkiApp（がっきれんしゅう） HANDOFF v1.5
+# GakkiApp（がっきれんしゅう） HANDOFF v1.5.1
 
 子供向け楽器練習アプリ。Termuxのみ・GitHub ActionsでAPKビルド。
 
@@ -12,9 +12,18 @@
 - ⚠️ `git init` は必ず `~/GakkiApp` 内で実行（ホームで実行するとGH013でトークン露出リスク）
 - ⚠️ Kotlin: **inner class の中に data class を定義しない**（`Class is not allowed here`でビルド失敗）。データ保持クラスはトップレベルへ
 
+## デプロイ（deploy.sh・恒久ルール／全納品物に適用）
+- リポジトリ直下の `deploy.sh` で push とタグ発行までを1コマンドで完結（`bash deploy.sh "コミットメッセージ"`）
+- トークンは `git config --global github.token` から取得（チャットに貼らない・echoしない）
+- **`git pull --rebase origin main` が必須**: カタログ管理システムがAPI経由で `.github/workflows/release.yml` と `ci/appathy.keystore` をリモートに直接コミットしているため、これが無いと push が rejected になる
+- `release.yml` / `ci/appathy.keystore` / `ci/` は配布ビルドに必要。**削除しない**（ローカルには無くてもよい。deploy.sh の pull で取り込まれる）
+- タグを打つと Actions がビルドして Release を作成 → 自作アプリストアに更新として出現
+- タグは直近Releaseのパッチ番号を自動インクリメント（例 v1.0.3 → v1.0.4）
+
 ## ファイル構成
 ```
 .github/workflows/build.yml      … Gradle 8.9 pinned, JDK17, artifact: GakkiApp-debug
+deploy.sh（push＋タグ発行）
 settings.gradle.kts / build.gradle.kts / app/build.gradle.kts
 app/debug.keystore
 app/src/main/AndroidManifest.xml … 全Activity portrait。アイコン=カスタネットのadaptive-icon
@@ -101,4 +110,5 @@ app/src/main/java/com/appathy/gakki/
 - v1.2.1 ビルド修正: `XyloNote`をトップレベルclassへ（inner class内data class禁止）
 - v1.3 木琴=停止廃止しテンポ差のみ（初級遅い/中級速い）・案内文削除／ハーモニカ=人を廃止しハーモニカ固定+ふくバーをスワイプ／音色刷新／アプリアイコンをカスタネットに
 - v1.4 新曲2曲追加（メリーさんのひつじ／ちょうちょう）＋トップで曲選択（`Music.Song`にリファクタ、`Music.current`で共有）／ハーモニカ音をやわらかい笛系に再刷新
+- v1.5.1 deploy.sh 追加（push＋pull --rebase＋タグ自動発行の恒久ルール適用）
 - v1.5 サウンドA/B切替を追加（`Music.soundBank`、トップで選択）。4楽器それぞれにBの音色をプログラム合成で用意（カスタネット=低く重い/タンバリン=小太鼓+薄い金属/木琴=木魚/ハーモニカ=ラッパ）
