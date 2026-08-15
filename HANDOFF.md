@@ -1,4 +1,4 @@
-# GakkiApp（がっきれんしゅう） HANDOFF v1.5.1
+# GakkiApp（がっきれんしゅう） HANDOFF v1.5.2
 
 子供向け楽器練習アプリ。Termuxのみ・GitHub ActionsでAPKビルド。
 
@@ -22,7 +22,7 @@
 
 ## ファイル構成
 ```
-.github/workflows/build.yml      … Gradle 8.9 pinned, JDK17, artifact: GakkiApp-debug
+.github/workflows/build.yml      … Gradle 8.9 pinned, JDK17。push時のビルド確認のみ（upload-artifactは削除＝Artifacts無料枠0.5GB枯渇対策）。APK配布はタグ→release.yml→Releaseが担当
 deploy.sh（push＋タグ発行）
 settings.gradle.kts / build.gradle.kts / app/build.gradle.kts
 app/debug.keystore
@@ -111,4 +111,5 @@ app/src/main/java/com/appathy/gakki/
 - v1.3 木琴=停止廃止しテンポ差のみ（初級遅い/中級速い）・案内文削除／ハーモニカ=人を廃止しハーモニカ固定+ふくバーをスワイプ／音色刷新／アプリアイコンをカスタネットに
 - v1.4 新曲2曲追加（メリーさんのひつじ／ちょうちょう）＋トップで曲選択（`Music.Song`にリファクタ、`Music.current`で共有）／ハーモニカ音をやわらかい笛系に再刷新
 - v1.5.1 deploy.sh 追加（push＋pull --rebase＋タグ自動発行の恒久ルール適用）
+- v1.5.2 build.yml の upload-artifact ステップを削除（Artifacts無料枠0.5GB枯渇→"Artifact storage quota has been hit"対策）。APKはReleaseから配布
 - v1.5 サウンドA/B切替を追加（`Music.soundBank`、トップで選択）。4楽器それぞれにBの音色をプログラム合成で用意（カスタネット=低く重い/タンバリン=小太鼓+薄い金属/木琴=木魚/ハーモニカ=ラッパ）

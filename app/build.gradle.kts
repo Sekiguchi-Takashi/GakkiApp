@@ -11,8 +11,8 @@ android {
         applicationId = "com.appathy.gakki"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.5.1"
+        versionCode = 9
+        versionName = "1.5.2"
     }
 
     signingConfigs {
