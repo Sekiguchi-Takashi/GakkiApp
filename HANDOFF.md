@@ -1,4 +1,4 @@
-# GakkiApp（がっきれんしゅう） HANDOFF v1.5.2
+# GakkiApp（がっきれんしゅう） HANDOFF v1.5.3
 
 子供向け楽器練習アプリ。Termuxのみ・GitHub ActionsでAPKビルド。
 
@@ -13,16 +13,19 @@
 - ⚠️ Kotlin: **inner class の中に data class を定義しない**（`Class is not allowed here`でビルド失敗）。データ保持クラスはトップレベルへ
 
 ## デプロイ（deploy.sh・恒久ルール／全納品物に適用）
-- リポジトリ直下の `deploy.sh` で push とタグ発行までを1コマンドで完結（`bash deploy.sh "コミットメッセージ"`）
-- トークンは `git config --global github.token` から取得（チャットに貼らない・echoしない）
-- **`git pull --rebase origin main` が必須**: カタログ管理システムがAPI経由で `.github/workflows/release.yml` と `ci/appathy.keystore` をリモートに直接コミットしているため、これが無いと push が rejected になる
-- `release.yml` / `ci/appathy.keystore` / `ci/` は配布ビルドに必要。**削除しない**（ローカルには無くてもよい。deploy.sh の pull で取り込まれる）
-- タグを打つと Actions がビルドして Release を作成 → 自作アプリストアに更新として出現
-- タグは直近Releaseのパッチ番号を自動インクリメント（例 v1.0.3 → v1.0.4）
+- `deploy.sh` で「push → pull --rebase → タグ発行」まで1コマンド（`bash deploy.sh "メッセージ"`）
+- 第2引数 `notag` で push のみ（`bash deploy.sh "メッセージ" notag`）
+- トークンは `git config --global github.token` から取得（チャットに貼らない・echo禁止・対話入力禁止）
+- **`git pull --rebase origin main` が必須**: カタログ管理システムがAPI経由で `release.yml` と `ci/appathy.keystore` をリモートに直接コミットするため、無いと push が rejected
+- **次タグはローカル算出**: `git fetch --tags` → `git tag --list 'v*' | sort -V | tail -1` の次パッチ版を `git tag` / `git push origin <tag>` でローカル発行。※APIのheads参照は反映遅延で一つ前に付くため禁止
+- `ci/` と `.github/workflows/release.yml` は配布ビルドに必要。削除・追跡解除しない
+- **build.yml は作らない**。CIは release.yml（タグ起動）のみ。`actions/upload-artifact` 不使用
+- **ファイル削除を伴う納品**では deploy.sh に `rm -f 対象パス` を足す（`unzip -o` は端末の旧ファイルを消さないため）
+- タグを打つと release.yml がビルドして Release を作成 → 自作アプリストアに更新として出現
 
 ## ファイル構成
 ```
-.github/workflows/build.yml      … Gradle 8.9 pinned, JDK17。push時のビルド確認のみ（upload-artifactは削除＝Artifacts無料枠0.5GB枯渇対策）。APK配布はタグ→release.yml→Releaseが担当
+.github/workflows/release.yml     … CIはこれ1本（タグ起動）。build.ymlは作らない（Artifacts枠0.5GB枯渇対策・upload-artifact不使用）。release.ymlとci/はカタログ側がコミット、削除・追跡解除しない
 deploy.sh（push＋タグ発行）
 settings.gradle.kts / build.gradle.kts / app/build.gradle.kts
 app/debug.keystore
@@ -111,5 +114,6 @@ app/src/main/java/com/appathy/gakki/
 - v1.3 木琴=停止廃止しテンポ差のみ（初級遅い/中級速い）・案内文削除／ハーモニカ=人を廃止しハーモニカ固定+ふくバーをスワイプ／音色刷新／アプリアイコンをカスタネットに
 - v1.4 新曲2曲追加（メリーさんのひつじ／ちょうちょう）＋トップで曲選択（`Music.Song`にリファクタ、`Music.current`で共有）／ハーモニカ音をやわらかい笛系に再刷新
 - v1.5.1 deploy.sh 追加（push＋pull --rebase＋タグ自動発行の恒久ルール適用）
-- v1.5.2 build.yml の upload-artifact ステップを削除（Artifacts無料枠0.5GB枯渇→"Artifact storage quota has been hit"対策）。APKはReleaseから配布
+- v1.5.2 build.yml の upload-artifact ステップを削除（Artifacts無料枠0.5GB枯渇対策）
+- v1.5.3 納品規約更新: build.yml廃止（CIはrelease.ymlのみ）／deploy.shのタグ算出をローカル`git tag`ベースに変更（API heads参照は反映遅延で禁止）＋`notag`引数追加／今回deploy.shに`rm -f .github/workflows/build.yml`を同梱
 - v1.5 サウンドA/B切替を追加（`Music.soundBank`、トップで選択）。4楽器それぞれにBの音色をプログラム合成で用意（カスタネット=低く重い/タンバリン=小太鼓+薄い金属/木琴=木魚/ハーモニカ=ラッパ）
